@@ -178,12 +178,7 @@ fn test_extloggable_strings() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     let logger = logger.with_params(o!("global_name" => "foobar"));
 
-    xlog!(
-        logger,
-        ThirdExternalLog {
-            name: "foo".to_string(),
-        }
-    );
+    xlog!(logger, ThirdExternalLog { name: "foo".to_string() });
 
     check_log_fields("test_foo_count", &mut data, "counter", f64::from(1));
 }
@@ -222,42 +217,12 @@ fn test_extloggable_setto() {
 fn basic_extloggable_grouped_by_string() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
-    xlog!(
-        logger,
-        ThirdExternalLog {
-            name: "bar".to_string(),
-        }
-    );
-    xlog!(
-        logger,
-        ThirdExternalLog {
-            name: "foo".to_string(),
-        }
-    );
-    xlog!(
-        logger,
-        ThirdExternalLog {
-            name: "bar".to_string(),
-        }
-    );
-    xlog!(
-        logger,
-        ThirdExternalLog {
-            name: "bar".to_string(),
-        }
-    );
-    xlog!(
-        logger,
-        ThirdExternalLog {
-            name: "bar".to_string(),
-        }
-    );
-    xlog!(
-        logger,
-        ThirdExternalLog {
-            name: "foo".to_string(),
-        }
-    );
+    xlog!(logger, ThirdExternalLog { name: "bar".to_string() });
+    xlog!(logger, ThirdExternalLog { name: "foo".to_string() });
+    xlog!(logger, ThirdExternalLog { name: "bar".to_string() });
+    xlog!(logger, ThirdExternalLog { name: "bar".to_string() });
+    xlog!(logger, ThirdExternalLog { name: "bar".to_string() });
+    xlog!(logger, ThirdExternalLog { name: "foo".to_string() });
 
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
@@ -361,9 +326,7 @@ fn test_set_slog_logger() {
 #[test]
 fn unwind_safety_works() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
-    let res = panic::catch_unwind(|| {
-        log_external_stat(&logger, 234, 1);
-    });
+    let res = panic::catch_unwind(|| { log_external_stat(&logger, 234, 1); });
     assert!(res.is_ok());
     // Wait for the stats logs.
     check_log_fields("test_counter", &mut data, "counter", f64::from(1));

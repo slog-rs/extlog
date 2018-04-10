@@ -106,6 +106,7 @@ macro_rules! define_stats {
     ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*])),*}) => {
         /// The list of statistics.
         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
+
         mod inner_stats {
         $(
                #[derive(Debug, Clone)]
@@ -255,16 +256,6 @@ where
         }
     }
 
-    // Get all the grouped value names currently tracked.
-    fn get_group_name_vals(&self, stat: &Stat) -> Vec<(String, f64)> {
-        // Only hold the read lock long enough to get the keys and values.
-        let inner_vals = stat.group_values.read().expect("Poisoned lock)");
-        inner_vals
-            .iter()
-            .map(|(k, v)| (k.clone(), v.as_float()))
-            .collect()
-    }
-
     /// Log all statistics.
     ///
     /// This function is usually just called on a timer by the logger directly.
@@ -272,7 +263,7 @@ where
         for stat in self.stats.values() {
             if stat.is_grouped {
                 // Log all the grouped values.
-                let outputs = self.get_group_name_vals(&stat);
+                let outputs = stat.get_group_name_vals();
 
                 // The `outputs` is a vector of tuples containing the (tag value, stat value).
                 for (name, val) in outputs {
@@ -303,6 +294,14 @@ where
                 ); // LCOV_EXCL_LINE Kcov bug?
             }
         }
+    }
+
+    /// Retrieve the current values of all stats tracked by this logger.
+    pub fn get_stats(&self) -> Vec<StatSnapshot> {
+        self.stats
+            .values()
+            .map(|stat| stat.get_snapshot())
+            .collect::<Vec<_>>()
     }
 }
 
@@ -588,7 +587,48 @@ where
     pub fn set_slog_logger(&mut self, logger: slog::Logger) {
         self.logger = logger;
     }
+
+    /// Retrieve the current values of all stats tracked by this logger.
+    pub fn get_stats(&self) -> Vec<StatSnapshot> {
+        self.tracker.get_stats()
+    }
 }
+
+/// A snapshot of the current values for a particular stat.
+// LCOV_EXCL_START not interesting to track automatic derive coverage
+#[derive(Debug)]
+pub struct StatSnapshot {
+    pub definition: &'static StatDefinition,
+    pub values: Vec<StatSnapshotValue>,
+}
+// LCOV_EXCL_STOP
+
+impl StatSnapshot {
+    /// Create a new snapshot of a stat
+    pub fn new(definition: &'static StatDefinition, values: Vec<StatSnapshotValue>) -> Self {
+        StatSnapshot { definition, values }
+    }
+}
+
+/// A snapshot of a current (possibly groupedl) value for a stat.
+// LCOV_EXCL_START not interesting to track automatic derive coverage
+#[derive(Debug)]
+pub struct StatSnapshotValue {
+    pub group_values: Vec<String>,
+    pub value: f64,
+}
+// LCOV_EXCL_STOP
+
+impl StatSnapshotValue {
+    /// Create a new snapshot value.
+    pub fn new(group_values: Vec<String>, value: f64) -> Self {
+        StatSnapshotValue {
+            group_values,
+            value,
+        }
+    }
+}
+
 
 ///////////////////////////
 // Private types and private methods.
@@ -620,6 +660,16 @@ impl Stat {
             .collect::<Vec<_>>()
     }
 
+    // Get all the grouped value names currently tracked.
+    fn get_group_name_vals(&self) -> Vec<(String, f64)> {
+        // Only hold the read lock long enough to get the keys and values.
+        let inner_vals = self.group_values.read().expect("Poisoned lock)");
+        inner_vals
+            .iter()
+            .map(|(k, v)| (k.clone(), v.as_float()))
+            .collect()
+    }
+
     // Check if the stat is grouped, and if so, get and update the correct
     // grouped values.
     fn check_update_grouped(&self, defn: &StatDefinition, trigger: &StatTrigger) {
@@ -636,8 +686,9 @@ impl Stat {
                 let inner_vals = self.group_values.read().expect("Poisoned lock");
                 let val = inner_vals.get(&tag_values);
                 if val.is_some() {
-                    val.unwrap()
-                        .update(&trigger.change(defn).expect("Bad log definition"));
+                    val.unwrap().update(&trigger.change(defn).expect(
+                        "Bad log definition",
+                    ));
                     return;
                 }
             }
@@ -646,12 +697,33 @@ impl Stat {
             let mut inner_vals = self.group_values.write().expect("Poisoned lock");
             // It's possible that while we were waiting for the write lock another thread got
             // in and created the stat entry, so check again.
-            let val = inner_vals
-                .entry(tag_values)
-                .or_insert_with(|| StatValue::new(0, 1));
+            let val = inner_vals.entry(tag_values).or_insert_with(
+                || StatValue::new(0, 1),
+            );
 
             val.update(&trigger.change(defn).expect("Bad log definition"));
         }
+    }
+
+    /// Get the current values for this stat as a MetricFamily
+    fn get_snapshot(&self) -> StatSnapshot {
+        let values = if self.is_grouped {
+            self.get_group_name_vals()
+                .iter()
+                .map(|&(ref group_value_str, value)| {
+                    let group_values = group_value_str
+                        .split(",")
+                        .map(|group| group.to_string())
+                        .collect::<Vec<_>>();
+
+                    StatSnapshotValue::new(group_values, value)
+                })
+                .collect()
+        } else {
+            vec![StatSnapshotValue::new(vec![], self.value.as_float())]
+        };
+
+        StatSnapshot::new(self.defn, values)
     }
 }
 
