@@ -1,0 +1,20 @@
+[package]
+name = "slog-extlog-derive"
+version = "3.1.0"
+authors = ["Metaswitch Networks Ltd"]
+publish =  false
+
+[dependencies]
+slog =  { version = "2.1", features = ['nested-values'] }
+syn = {version = "0.11.9", features = ["full"] }
+quote = "0.3.10"
+slog-extlog = { path = ".." }
+serde = "1.0"
+serde_derive = "1.0"
+
+[lib]
+proc-macro = true
+
+[dev-dependencies]
+erased-serde = "0.3"
+iobuffer = { git = "ssh://github.com/Metaswitch/iobuffer.git", branch = "master" }
