@@ -1,0 +1,23 @@
+language: rust
+rust:
+ - stable
+ - beta
+ - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+# Enforce that all new commits are signed off according to the DCO,
+# per CONTRIBUTING.md. Prior commits are either pre-fork, are signed off,
+# or were made by Mark Thebridge, who hereby certifies the DCO with regard
+# to each such commit.
+#
+# We then build all the code, then test it.
+#
+# Tests must be run on a single thread since they share keyspaces and tables.
+script:
+- |
+  DCO_SIGNING_BASE_COMMIT=e0b3f43a21490d815697a185e4a48c269859cbc4 &&
+  if git log ${DCO_SIGNING_BASE_COMMIT}.. --grep "^signed-off-by: .\+@.\+" --regexp-ignore-case --invert-grep --no-merges | grep ^ ;
+  then echo '**One or more commits are not signed off!' ; /bin/false ; fi &&
+  cargo build --all &&
+  cargo test --all
