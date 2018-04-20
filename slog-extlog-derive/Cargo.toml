@@ -22,4 +22,4 @@ proc-macro = true
 
 [dev-dependencies]
 erased-serde = "0.3"
-iobuffer = { git = "ssh://github.com/Metaswitch/iobuffer.git", branch = "master" }
+iobuffer = "0.1"
