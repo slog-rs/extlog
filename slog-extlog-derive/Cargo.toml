@@ -2,7 +2,12 @@
 name = "slog-extlog-derive"
 version = "3.1.0"
 authors = ["Metaswitch Networks Ltd"]
-publish =  false
+license = "Apache-2.0"
+description = "Custom derive code for slog-extlog"
+homepage = "https://github.com/Metaswitch/slog-extlog"
+repository = "https://github.com/Metaswitch/slog-extlog"
+keywords = ["slog", "log", "logging"]
+readme = ["../README.md"]
 
 [dependencies]
 slog =  { version = "2.1", features = ['nested-values'] }
