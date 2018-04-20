@@ -7,7 +7,7 @@ description = "Object-based logging and statistics tracking through logs"
 homepage = "https://github.com/Metaswitch/slog-extlog"
 repository = "https://github.com/Metaswitch/slog-extlog"
 keywords = ["slog", "log", "logging"]
-readme = ["README.md"]
+readme = "README.md"
 
 [[bench]]
 harness = false
