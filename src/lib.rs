@@ -144,7 +144,7 @@
 //! ```
 //!
 //! [`define_stats`]: ./macro.define_stats.html
-//! [`Logger`]: ../slog/struct.Logger.html)
+//! [`Logger`]: ../slog/struct.Logger.html
 //! [`ExtLoggable`]: trait.ExtLoggable.html
 //! [`slog`]:  ../slog/index.html
 //! [`StatisticsLogger`]: stats/struct.StatisticsLogger.html
