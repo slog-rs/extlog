@@ -193,3 +193,54 @@ pub fn check_expected_stats(logs: &[serde_json::Value], mut expected_stats: Vec<
 
     assert_eq!(expected_stats.len(), 0);
 }
+
+// LCOV_EXCL_START Don't test derives
+#[derive(Debug)]
+pub struct ExpectedStatSnapshot {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub stat_type: StatType,
+    pub values: Vec<ExpectedStatSnapshotValue>,
+}
+
+#[derive(Debug)]
+pub struct ExpectedStatSnapshotValue {
+    pub group_values: Vec<String>,
+    pub value: f64,
+}
+// LCOV_EXCL_STOP
+
+/// Check that a set of stat snapshots are as expected.
+pub fn check_expected_stat_snaphots(
+    stats: &[StatSnapshot],
+    expected_stats: &[ExpectedStatSnapshot],
+) {
+    for stat in expected_stats {
+        let found_stat = stats.iter().find(|s| s.definition.name() == stat.name);
+
+        assert!(found_stat.is_some(), "Failed to find stat {}", stat.name);
+        let found_stat = found_stat.unwrap();
+
+        assert_eq!(found_stat.definition.stype(), stat.stat_type);
+        assert_eq!(found_stat.definition.description(), stat.description);
+
+        for value in stat.values.iter() {
+            let found_value = found_stat.values.iter().find(|val| {
+                val.group_values == value.group_values
+            });
+            assert!(
+                found_value.is_some(),
+                "Failed to find value with groups {:?} for stat {}",
+                value.group_values, // LCOV_EXCL_LINE
+                stat.name // LCOV_EXCL_LINE
+            );
+            let found_value = found_value.unwrap();
+            assert_eq!(found_value.group_values, found_value.group_values);
+            assert_eq!(found_value.value, value.value);
+        }
+
+        assert_eq!(found_stat.values.len(), stat.values.len());
+    }
+
+    assert_eq!(stats.len(), expected_stats.len());
+}

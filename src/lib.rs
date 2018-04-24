@@ -168,7 +168,7 @@ pub mod slog_test;
 
 /// A trait that defines requirements to be automatically derivable.
 ///
-/// Any generic parameters in`ExtLoggable` objects must have this as a trait bound.
+/// Any generic parameters in `ExtLoggable` objects must have this as a trait bound.
 pub trait SlogValueDerivable
     : std::fmt::Debug + Clone + serde::Serialize + Send + 'static {
 }

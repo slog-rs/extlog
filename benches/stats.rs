@@ -127,12 +127,7 @@ fn single_grouped_counter_multi_bucket(bench: &mut Bencher) {
     let logger = setup_logger();
     let mut idx = 0;
     bench.iter(|| {
-        xlog!(
-            logger,
-            ThirdExternalLog {
-                name: format!("name-{}", idx),
-            }
-        );
+        xlog!(logger, ThirdExternalLog { name: format!("name-{}", idx) });
         idx += 1;
     })
 }
@@ -156,6 +151,20 @@ fn double_grouped_counter(bench: &mut Bencher) {
     })
 }
 
+fn get_stats(bench: &mut Bencher) {
+    let logger = setup_logger();
+    xlog!(
+        logger,
+        FourthExternalLog {
+            name: "my_name".to_string(),
+            error: 1,
+            foo_count: 4242,
+        }
+    );
+
+    bench.iter(|| { logger.get_stats(); })
+}
+
 benchmark_group!(
     benches,
     single_count_log,
@@ -163,6 +172,7 @@ benchmark_group!(
     gauge_incr_decr_log,
     single_grouped_counter_one_bucket,
     single_grouped_counter_multi_bucket,
-    double_grouped_counter
+    double_grouped_counter,
+    get_stats
 );
 benchmark_main!(benches);

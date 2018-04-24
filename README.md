@@ -10,6 +10,7 @@ This repository provides the following.
  - An API for defining statistic values to track, and to modify them based on the external logs
  - A `StatisticsLogger` type that wraps an `slog::Logger`, which handles logging and updating tracked stats.
  - An `xlog!` macro for making the logs through the `StatisticsLogger`.
+ - An API for retrieving the current values of all stats from the `StatisticsLogger`.
 
 # Use of this crate
 
