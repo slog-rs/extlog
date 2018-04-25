@@ -1,6 +1,6 @@
 [package]
 name = "slog-extlog-derive"
-version = "3.1.0"
+version = "3.2.0"
 authors = ["Metaswitch Networks Ltd"]
 license = "Apache-2.0"
 description = "Custom derive code for slog-extlog"
@@ -13,7 +13,7 @@ readme = "../README.md"
 slog =  { version = "2.1", features = ['nested-values'] }
 syn = {version = "0.11.9", features = ["full"] }
 quote = "0.3.10"
-slog-extlog = { version = "3.1", path = ".." }
+slog-extlog = { version = "3.2", path = ".." }
 serde = "1.0"
 serde_derive = "1.0"
 
