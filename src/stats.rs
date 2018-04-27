@@ -696,10 +696,8 @@ impl Stat {
             // Use an inner block here to ensure the read lock drops out of scope.
             {
                 let inner_vals = self.group_values.read().expect("Poisoned lock");
-                let val = inner_vals.get(&tag_values);
-                if val.is_some() {
-                    val.unwrap()
-                        .update(&trigger.change(defn).expect("Bad log definition"));
+                if let Some(val) = inner_vals.get(&tag_values) {
+                    val.update(&trigger.change(defn).expect("Bad log definition"));
                     return;
                 }
             }
@@ -785,9 +783,10 @@ impl StatValue {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     struct DummyNonCloneFormatter;
     impl StatisticsLogFormatter for DummyNonCloneFormatter {
-        fn log_stat(&self, logger: &StatisticsLogger<Self>, stat: &StatLogData)
+        fn log_stat(&self, _logger: &StatisticsLogger<Self>, _stat: &StatLogData)
         where
             Self: Sized,
         {
