@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Changed
 
+### Fixed
+- Proper `Clone` support for `StatisticsLogger`
+
 ## [3.2.0] - 2018-04-25
 ### Added
 - Add support for retrieving the current values of all stats.

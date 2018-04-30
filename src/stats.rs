@@ -496,12 +496,25 @@ pub trait StatisticsLogFormatter {
 /// A logger with statistics tracking.
 ///
 /// This should only be created through the `new` method.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StatisticsLogger<T: StatisticsLogFormatter> {
     /// The logger that receives the logs.
     logger: slog::Logger,
     /// The stats tracker.
     tracker: Arc<StatsTracker<T>>,
+}
+
+// Manually impl clone because the automatically derived type requires that `T:Clone`,
+// which isn't needed.
+//
+// See https://github.com/rust-lang/rust/issues/26925 for details.
+impl<T: StatisticsLogFormatter> Clone for StatisticsLogger<T> {
+    fn clone(&self) -> Self {
+        StatisticsLogger {
+            logger: self.logger.clone(),
+            tracker: self.tracker.clone(),
+        }
+    }
 }
 
 impl<T: StatisticsLogFormatter> Deref for StatisticsLogger<T> {
@@ -629,7 +642,6 @@ impl StatSnapshotValue {
     }
 }
 
-
 ///////////////////////////
 // Private types and private methods.
 ///////////////////////////
@@ -684,11 +696,8 @@ impl Stat {
             // Use an inner block here to ensure the read lock drops out of scope.
             {
                 let inner_vals = self.group_values.read().expect("Poisoned lock");
-                let val = inner_vals.get(&tag_values);
-                if val.is_some() {
-                    val.unwrap().update(&trigger.change(defn).expect(
-                        "Bad log definition",
-                    ));
+                if let Some(val) = inner_vals.get(&tag_values) {
+                    val.update(&trigger.change(defn).expect("Bad log definition"));
                     return;
                 }
             }
@@ -697,9 +706,9 @@ impl Stat {
             let mut inner_vals = self.group_values.write().expect("Poisoned lock");
             // It's possible that while we were waiting for the write lock another thread got
             // in and created the stat entry, so check again.
-            let val = inner_vals.entry(tag_values).or_insert_with(
-                || StatValue::new(0, 1),
-            );
+            let val = inner_vals
+                .entry(tag_values)
+                .or_insert_with(|| StatValue::new(0, 1));
 
             val.update(&trigger.change(defn).expect("Bad log definition"));
         }
@@ -767,5 +776,31 @@ impl StatValue {
     /// Return the statistic value as a float, for use in display.
     fn as_float(&self) -> f64 {
         (self.num.load(Ordering::Relaxed) as f64) / (self.divisor as isize as f64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[allow(dead_code)]
+    struct DummyNonCloneFormatter;
+    impl StatisticsLogFormatter for DummyNonCloneFormatter {
+        fn log_stat(&self, _logger: &StatisticsLogger<Self>, _stat: &StatLogData)
+        where
+            Self: Sized,
+        {
+        }
+    }
+
+    #[test]
+    // Check that loggers can be cloned even if the formatter can't.
+    fn check_clone() {
+        let logger = StatisticsLogger::new(
+            slog::Logger::root(slog::Discard, o!()),
+            StatsConfigBuilder::new(DummyNonCloneFormatter).fuse(),
+        );
+
+        let _new_logger: StatisticsLogger<DummyNonCloneFormatter> = logger.clone();
     }
 }
