@@ -38,6 +38,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 use std::thread;
 use std::ops::Deref;
+use std::marker::PhantomData;
 
 use super::slog;
 
@@ -206,8 +207,9 @@ pub struct StatsTracker<T: StatisticsLogFormatter> {
     // The list of statistics, mapping from stat name to value.
     stats: HashMap<&'static str, Stat>,
 
-    // The callback to make for logging the statistic.
-    stat_formatter: T,
+    // The callback to make for logging the statistic.  This is a marker type so store it
+    // as phatom.
+    stat_formatter: PhantomData<T>,
 }
 // LCOV_EXCL_STOP
 
@@ -216,10 +218,10 @@ where
     T: StatisticsLogFormatter,
 {
     /// Create a new tracker with the given formatter.
-    pub fn new(stat_formatter: T) -> Self {
+    pub fn new() -> Self {
         StatsTracker {
             stats: HashMap::new(),
-            stat_formatter,
+            stat_formatter: PhantomData,
         } // LCOV_EXCL_LINE Kcov bug?
     }
 
@@ -269,7 +271,7 @@ where
                 for (name, val) in outputs {
                     // The tags require a vector of (tag name, tag value) types, so get these.
                     let tags = stat.get_tags(&name);
-                    self.stat_formatter.log_stat(
+                    T::log_stat(
                         &logger,
                         &StatLogData {
                             stype: stat.defn.stype(),
@@ -282,7 +284,7 @@ where
                 }
             } else {
                 // No grouping - just log the total
-                self.stat_formatter.log_stat(
+                T::log_stat(
                     &logger,
                     &StatLogData {
                         stype: stat.defn.stype(),
@@ -340,7 +342,7 @@ where
     /// If this is `None` (the default), then a new core is created for logging stats.
     pub handle: Option<Handle>,
     /// An object that handles formatting the individual statistic values into a log.
-    pub stat_formatter: T,
+    pub stat_formatter: PhantomData<T>,
 }
 // LCOV_EXCL_STOP
 
@@ -381,11 +383,11 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
     /// Create a new config builder, using the given formatter.
     ///
     /// The formatter must be provided here as it is intrinsic to the builder.
-    pub fn new(formatter: T) -> Self {
+    pub fn new() -> Self {
         StatsConfigBuilder {
             cfg: StatsConfig {
                 stats: EMPTY_STATS,
-                stat_formatter: formatter,
+                stat_formatter: PhantomData,
                 handle: None,
                 interval_secs: None,
             },
@@ -422,13 +424,16 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
 // A default `StatsDefinition` with no statistics in it.
 define_stats!{ EMPTY_STATS = {} }
 
-impl Default for StatsConfig<DefaultStatisticsLogFormatter> {
+impl<F> Default for StatsConfig<F>
+where
+    F: StatisticsLogFormatter,
+{
     fn default() -> Self {
         StatsConfig {
             interval_secs: Some(DEFAULT_LOG_INTERVAL_SECS),
             stats: EMPTY_STATS,
             handle: None,
-            stat_formatter: DefaultStatisticsLogFormatter,
+            stat_formatter: PhantomData,
         }
     }
 }
@@ -461,7 +466,7 @@ pub static DEFAULT_LOG_ID: &str = "STATS-1";
 
 impl StatisticsLogFormatter for DefaultStatisticsLogFormatter {
     /// The formatting callback.  This default implementation just logs each field.
-    fn log_stat(&self, logger: &StatisticsLogger<Self>, stat: &StatLogData)
+    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData)
     where
         Self: Sized,
     {
@@ -488,7 +493,7 @@ pub trait StatisticsLogFormatter {
     /// The `DefaultStatisticsLogFormatter` provides a basic format, or users can override the
     /// format of the generated logs by providing an object that implements this trait in the
     /// `StatsConfig`.
-    fn log_stat(&self, logger: &StatisticsLogger<Self>, stat: &StatLogData)
+    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData)
     where
         Self: Sized;
 }
@@ -532,7 +537,7 @@ where
     ///
     /// The `StatsConfig` must contain the definitions necessary to generate metrics from logs.
     pub fn new(logger: slog::Logger, cfg: StatsConfig<T>) -> StatisticsLogger<T> {
-        let mut tracker = StatsTracker::new(cfg.stat_formatter);
+        let mut tracker = StatsTracker::new();
         for s in cfg.stats {
             tracker.add_statistic(*s)
         }
@@ -786,7 +791,7 @@ mod tests {
     #[allow(dead_code)]
     struct DummyNonCloneFormatter;
     impl StatisticsLogFormatter for DummyNonCloneFormatter {
-        fn log_stat(&self, _logger: &StatisticsLogger<Self>, _stat: &StatLogData)
+        fn log_stat(_logger: &StatisticsLogger<Self>, _stat: &StatLogData)
         where
             Self: Sized,
         {
@@ -798,7 +803,7 @@ mod tests {
     fn check_clone() {
         let logger = StatisticsLogger::new(
             slog::Logger::root(slog::Discard, o!()),
-            StatsConfigBuilder::new(DummyNonCloneFormatter).fuse(),
+            StatsConfigBuilder::<DummyNonCloneFormatter>::new().fuse(),
         );
 
         let _new_logger: StatisticsLogger<DummyNonCloneFormatter> = logger.clone();
