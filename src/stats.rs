@@ -247,11 +247,13 @@ where
     fn update_stats(&self, log: &StatTrigger) {
         for defn in log.stat_list() {
             if log.condition(*defn) {
-                let stat = &self.stats.get(defn.name()).expect(&format!(
-                    "No statistic found with name {}, did you try writing a log through
-                    a logger which wasn't initialized with your stats definitions?",
-                    defn.name()
-                ));
+                let stat = &self.stats.get(defn.name()).unwrap_or_else(|| {
+                    panic!(
+                        "No statistic found with name {}, did you try writing a log through a
+                         logger which wasn't initialized with your stats definitions?",
+                        defn.name()
+                    )
+                });
                 stat.value
                     .update(&log.change(*defn).expect("Bad log definition"));
                 // If this is a grouped stat, then we may also need to update the grouped
