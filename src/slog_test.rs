@@ -157,7 +157,7 @@ pub fn create_logger_buffer(
         logger,
         StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
             .with_log_interval(TEST_LOG_INTERVAL)
-            .with_stats(stats)
+            .with_stats(vec![stats])
             .fuse(), // LCOV_EXCL_LINE Kcov bug?
     ); // LCOV_EXCL_LINE Kcov bug?
     (logger, data)

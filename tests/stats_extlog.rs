@@ -178,7 +178,12 @@ fn test_extloggable_strings() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     let logger = logger.with_params(o!("global_name" => "foobar"));
 
-    xlog!(logger, ThirdExternalLog { name: "foo".to_string() });
+    xlog!(
+        logger,
+        ThirdExternalLog {
+            name: "foo".to_string(),
+        }
+    );
 
     check_log_fields("test_foo_count", &mut data, "counter", f64::from(1));
 }
@@ -217,12 +222,42 @@ fn test_extloggable_setto() {
 fn basic_extloggable_grouped_by_string() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
-    xlog!(logger, ThirdExternalLog { name: "bar".to_string() });
-    xlog!(logger, ThirdExternalLog { name: "foo".to_string() });
-    xlog!(logger, ThirdExternalLog { name: "bar".to_string() });
-    xlog!(logger, ThirdExternalLog { name: "bar".to_string() });
-    xlog!(logger, ThirdExternalLog { name: "bar".to_string() });
-    xlog!(logger, ThirdExternalLog { name: "foo".to_string() });
+    xlog!(
+        logger,
+        ThirdExternalLog {
+            name: "bar".to_string(),
+        }
+    );
+    xlog!(
+        logger,
+        ThirdExternalLog {
+            name: "foo".to_string(),
+        }
+    );
+    xlog!(
+        logger,
+        ThirdExternalLog {
+            name: "bar".to_string(),
+        }
+    );
+    xlog!(
+        logger,
+        ThirdExternalLog {
+            name: "bar".to_string(),
+        }
+    );
+    xlog!(
+        logger,
+        ThirdExternalLog {
+            name: "bar".to_string(),
+        }
+    );
+    xlog!(
+        logger,
+        ThirdExternalLog {
+            name: "foo".to_string(),
+        }
+    );
 
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
@@ -326,11 +361,44 @@ fn test_set_slog_logger() {
 #[test]
 fn unwind_safety_works() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
-    let res = panic::catch_unwind(|| { log_external_stat(&logger, 234, 1); });
+    let res = panic::catch_unwind(|| {
+        log_external_stat(&logger, 234, 1);
+    });
     assert!(res.is_ok());
     // Wait for the stats logs.
     check_log_fields("test_counter", &mut data, "counter", f64::from(1));
 
     let logs = logs_in_range("STATS-1", "STATS-2", &mut data);
     assert_eq!(logs.len(), 0);
+}
+
+#[test]
+fn multiple_stats_defns() {
+    #[derive(ExtLoggable, Clone, Serialize)]
+    #[LogDetails(Id = "100", Text = "Soemthing special happened", Level = "Info")]
+    #[StatTrigger(StatName = "test_special_counter", Action = "Incr", Value = "1")]
+    struct SpecialLog;
+
+    define_stats! {
+        SLOG_EXTRA_STATS = {
+            // Some simple counters
+            test_special_counter(Counter, "An extra-special Test counter", [])
+        }
+    }
+
+    let mut data = iobuffer::IoBuffer::new();
+    let logger = new_test_logger(data.clone());
+
+    let logger = StatisticsLogger::new(
+        logger,
+        StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
+            .with_log_interval(TEST_LOG_INTERVAL)
+            .with_stats(vec![SLOG_TEST_STATS, SLOG_EXTRA_STATS])
+            .fuse(), // LCOV_EXCL_LINE Kcov bug?
+    ); // LCOV_EXCL_LINE Kcov bug?
+
+    xlog!(logger, SpecialLog);
+    log_external_stat(&logger, 246, 7);
+    check_log_fields("test_counter", &mut data, "counter", f64::from(1));
+    check_log_fields("test_special_counter", &mut data, "counter", f64::from(1));
 }

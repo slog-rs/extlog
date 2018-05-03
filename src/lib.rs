@@ -126,7 +126,7 @@
 //!     let logger = slog::Logger::root(
 //!         Mutex::new(slog_json::Json::default(std::io::stdout())).map(slog::Fuse),
 //!         o!());
-//!     let foo_logger = stats::StatisticsLogger::new(
+//!     let foo_logger = stats::StatisticsLogger::<stats::DefaultStatisticsLogFormatter>::new(
 //!                        logger.new(o!("cxt" =>
 //!                          FooContext {
 //!                            id: "123456789".to_string(),
@@ -153,6 +153,7 @@
 //! [`xlog!()`]: macro.xlog.html
 
 // Copyright 2017 Metaswitch Networks
+
 extern crate serde;
 #[macro_use]
 extern crate slog;

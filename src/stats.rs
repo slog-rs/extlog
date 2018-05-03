@@ -111,7 +111,7 @@ macro_rules! define_stats {
         mod inner_stats {
         $(
                #[derive(Debug, Clone)]
-               // Prometheus metrics are snake_case, so allow non-camcl-case types here.
+               // Prometheus metrics are snake_case, so allow non-camel-case types here.
                #[allow(non_camel_case_types)]
                pub struct $stat;
             )*
@@ -336,7 +336,7 @@ where
     pub interval_secs: Option<u64>,
     /// The list of statistics to track.  This MUST be created using the
     /// [`define_stats`](../macro.define_stats.html) macro.
-    pub stats: StatDefinitions,
+    pub stats: Vec<StatDefinitions>,
     /// The [`tokio` reactor core](../tokio_core/reactor/struct.Core.html) to run the stats logging
     /// on, if the user is using `tokio` already.
     /// If this is `None` (the default), then a new core is created for logging stats.
@@ -369,8 +369,9 @@ where
 /// }
 ///
 /// fn main() {
-///     let cfg = StatsConfigBuilder::new(DefaultStatisticsLogFormatter)
-///                  .with_stats(MY_STATS)
+///     let full_stats = vec![MY_STATS];
+///     let cfg = StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
+///                  .with_stats(full_stats)
 ///                  .with_log_interval(30)
 ///                  .fuse();
 /// }
@@ -386,7 +387,7 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
     pub fn new() -> Self {
         StatsConfigBuilder {
             cfg: StatsConfig {
-                stats: EMPTY_STATS,
+                stats: vec![],
                 stat_formatter: PhantomData,
                 handle: None,
                 interval_secs: None,
@@ -395,7 +396,7 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
     }
 
     /// Set the list of statistics to track.
-    pub fn with_stats(mut self, defns: StatDefinitions) -> Self {
+    pub fn with_stats(mut self, defns: Vec<StatDefinitions>) -> Self {
         self.cfg.stats = defns;
         self
     }
@@ -422,6 +423,7 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
 }
 
 // A default `StatsDefinition` with no statistics in it.
+// Deprecated since 4.0 - just use an empty vector.
 define_stats!{ EMPTY_STATS = {} }
 
 impl<F> Default for StatsConfig<F>
@@ -431,7 +433,7 @@ where
     fn default() -> Self {
         StatsConfig {
             interval_secs: Some(DEFAULT_LOG_INTERVAL_SECS),
-            stats: EMPTY_STATS,
+            stats: vec![EMPTY_STATS],
             handle: None,
             stat_formatter: PhantomData,
         }
@@ -538,8 +540,10 @@ where
     /// The `StatsConfig` must contain the definitions necessary to generate metrics from logs.
     pub fn new(logger: slog::Logger, cfg: StatsConfig<T>) -> StatisticsLogger<T> {
         let mut tracker = StatsTracker::new();
-        for s in cfg.stats {
-            tracker.add_statistic(*s)
+        for set in cfg.stats {
+            for s in set {
+                tracker.add_statistic(*s)
+            }
         }
 
         // Wrap the tracker in an Arc so we can pass it to the Logger and to the timer.
