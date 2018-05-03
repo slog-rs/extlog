@@ -8,7 +8,7 @@
 //! of logging.
 //!
 //! Users should use the [`define_stats`] macro to list their statistics.  They can then pass the
-//! list (along with stats from any sepenedncies) to a [`StatisticsLogger`] wrapping an
+//! list (along with stats from any dependencies) to a [`StatisticsLogger`] wrapping an
 //! [`slog:Logger`].  The statistics trigger function on the `ExtLoggable` objects then triggers
 //! statistic updates based on logged values.
 //!
