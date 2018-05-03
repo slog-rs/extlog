@@ -140,7 +140,8 @@
 //! }
 //!
 //! fn main() {
-//!   let cfg = stats::StatsConfig {stats:  FOO_STATS, ..Default::default() };
+//!   let cfg = stats::StatsConfigBuilder::<stats::DefaultStatisticsLogFormatter>::new().
+//!       with_stats(vec![FOO_STATS]).fuse();
 //!
 //!   // Create the logger using whatever log format required.
 //!   let slog_logger = slog::Logger::root(slog::Discard, o!());

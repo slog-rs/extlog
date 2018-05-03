@@ -7,12 +7,15 @@
 //! statistic.   This generates fast, compile-time checking for statistics updates at the point
 //! of logging.
 //!
-//! Users should use the [`define_stats`] macro to list their statistics, and then pass the
-//! list to a [`StatisticsLogger`] wrapping an [`slog:Logger`].  They can then use the statistics
-//! trigger function on the `ExtLoggable` objects to triggwr statistic updates based on logged
-//! values.
+//! Users should use the [`define_stats`] macro to list their statistics.  They can then pass the
+//! list (along with stats from any dependencies) to a [`StatisticsLogger`] wrapping an
+//! [`slog:Logger`].  The statistics trigger function on the `ExtLoggable` objects then triggers
+//! statistic updates based on logged values.
 //!
-//! Triggers should be added to `ExtLoggable` objects using the [`slog-extlog-derive`] crate.
+//! Library users should export the result of `define_stats!`, so that binary developers can
+//! track the set of stats from all dependent crates in a single tracker.
+//!
+//! Triggers should be added to [`ExtLoggable`] objects using the [`slog-extlog-derive`] crate.
 //!
 //! [`ExtLoggable`]: ../slog-extlog/trait.ExtLoggable.html
 //! [`define_stats`]: ./macro.define_stats.html
@@ -38,6 +41,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 use std::thread;
 use std::ops::Deref;
+use std::marker::PhantomData;
 
 use super::slog;
 
@@ -110,7 +114,7 @@ macro_rules! define_stats {
         mod inner_stats {
         $(
                #[derive(Debug, Clone)]
-               // Prometheus metrics are snake_case, so allow non-camcl-case types here.
+               // Prometheus metrics are snake_case, so allow non-camel-case types here.
                #[allow(non_camel_case_types)]
                pub struct $stat;
             )*
@@ -206,8 +210,9 @@ pub struct StatsTracker<T: StatisticsLogFormatter> {
     // The list of statistics, mapping from stat name to value.
     stats: HashMap<&'static str, Stat>,
 
-    // The callback to make for logging the statistic.
-    stat_formatter: T,
+    // The callback to make for logging the statistic.  This is a marker type so store it
+    // as phatom.
+    stat_formatter: PhantomData<T>,
 }
 // LCOV_EXCL_STOP
 
@@ -216,10 +221,10 @@ where
     T: StatisticsLogFormatter,
 {
     /// Create a new tracker with the given formatter.
-    pub fn new(stat_formatter: T) -> Self {
+    pub fn new() -> Self {
         StatsTracker {
             stats: HashMap::new(),
-            stat_formatter,
+            stat_formatter: PhantomData,
         } // LCOV_EXCL_LINE Kcov bug?
     }
 
@@ -242,11 +247,13 @@ where
     fn update_stats(&self, log: &StatTrigger) {
         for defn in log.stat_list() {
             if log.condition(*defn) {
-                let stat = &self.stats.get(defn.name()).expect(&format!(
-                    "No statistic found with name {}, did you try writing a log through
-                    a logger which wasn't initialized with your stats definitions?",
-                    defn.name()
-                ));
+                let stat = &self.stats.get(defn.name()).unwrap_or_else(|| {
+                    panic!(
+                        "No statistic found with name {}, did you try writing a log through a
+                         logger which wasn't initialized with your stats definitions?",
+                        defn.name()
+                    )
+                });
                 stat.value
                     .update(&log.change(*defn).expect("Bad log definition"));
                 // If this is a grouped stat, then we may also need to update the grouped
@@ -269,7 +276,7 @@ where
                 for (name, val) in outputs {
                     // The tags require a vector of (tag name, tag value) types, so get these.
                     let tags = stat.get_tags(&name);
-                    self.stat_formatter.log_stat(
+                    T::log_stat(
                         &logger,
                         &StatLogData {
                             stype: stat.defn.stype(),
@@ -282,7 +289,7 @@ where
                 }
             } else {
                 // No grouping - just log the total
-                self.stat_formatter.log_stat(
+                T::log_stat(
                     &logger,
                     &StatLogData {
                         stype: stat.defn.stype(),
@@ -334,13 +341,13 @@ where
     pub interval_secs: Option<u64>,
     /// The list of statistics to track.  This MUST be created using the
     /// [`define_stats`](../macro.define_stats.html) macro.
-    pub stats: StatDefinitions,
+    pub stats: Vec<StatDefinitions>,
     /// The [`tokio` reactor core](../tokio_core/reactor/struct.Core.html) to run the stats logging
     /// on, if the user is using `tokio` already.
     /// If this is `None` (the default), then a new core is created for logging stats.
     pub handle: Option<Handle>,
     /// An object that handles formatting the individual statistic values into a log.
-    pub stat_formatter: T,
+    pub stat_formatter: PhantomData<T>,
 }
 // LCOV_EXCL_STOP
 
@@ -367,8 +374,9 @@ where
 /// }
 ///
 /// fn main() {
-///     let cfg = StatsConfigBuilder::new(DefaultStatisticsLogFormatter)
-///                  .with_stats(MY_STATS)
+///     let full_stats = vec![MY_STATS];
+///     let cfg = StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
+///                  .with_stats(full_stats)
 ///                  .with_log_interval(30)
 ///                  .fuse();
 /// }
@@ -381,11 +389,11 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
     /// Create a new config builder, using the given formatter.
     ///
     /// The formatter must be provided here as it is intrinsic to the builder.
-    pub fn new(formatter: T) -> Self {
+    pub fn new() -> Self {
         StatsConfigBuilder {
             cfg: StatsConfig {
-                stats: EMPTY_STATS,
-                stat_formatter: formatter,
+                stats: vec![],
+                stat_formatter: PhantomData,
                 handle: None,
                 interval_secs: None,
             },
@@ -393,7 +401,7 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
     }
 
     /// Set the list of statistics to track.
-    pub fn with_stats(mut self, defns: StatDefinitions) -> Self {
+    pub fn with_stats(mut self, defns: Vec<StatDefinitions>) -> Self {
         self.cfg.stats = defns;
         self
     }
@@ -420,15 +428,19 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
 }
 
 // A default `StatsDefinition` with no statistics in it.
+// Deprecated since 4.0 - just use an empty vector.
 define_stats!{ EMPTY_STATS = {} }
 
-impl Default for StatsConfig<DefaultStatisticsLogFormatter> {
+impl<F> Default for StatsConfig<F>
+where
+    F: StatisticsLogFormatter,
+{
     fn default() -> Self {
         StatsConfig {
             interval_secs: Some(DEFAULT_LOG_INTERVAL_SECS),
-            stats: EMPTY_STATS,
+            stats: vec![EMPTY_STATS],
             handle: None,
-            stat_formatter: DefaultStatisticsLogFormatter,
+            stat_formatter: PhantomData,
         }
     }
 }
@@ -461,7 +473,7 @@ pub static DEFAULT_LOG_ID: &str = "STATS-1";
 
 impl StatisticsLogFormatter for DefaultStatisticsLogFormatter {
     /// The formatting callback.  This default implementation just logs each field.
-    fn log_stat(&self, logger: &StatisticsLogger<Self>, stat: &StatLogData)
+    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData)
     where
         Self: Sized,
     {
@@ -488,7 +500,7 @@ pub trait StatisticsLogFormatter {
     /// The `DefaultStatisticsLogFormatter` provides a basic format, or users can override the
     /// format of the generated logs by providing an object that implements this trait in the
     /// `StatsConfig`.
-    fn log_stat(&self, logger: &StatisticsLogger<Self>, stat: &StatLogData)
+    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData)
     where
         Self: Sized;
 }
@@ -532,9 +544,11 @@ where
     ///
     /// The `StatsConfig` must contain the definitions necessary to generate metrics from logs.
     pub fn new(logger: slog::Logger, cfg: StatsConfig<T>) -> StatisticsLogger<T> {
-        let mut tracker = StatsTracker::new(cfg.stat_formatter);
-        for s in cfg.stats {
-            tracker.add_statistic(*s)
+        let mut tracker = StatsTracker::new();
+        for set in cfg.stats {
+            for s in set {
+                tracker.add_statistic(*s)
+            }
         }
 
         // Wrap the tracker in an Arc so we can pass it to the Logger and to the timer.
@@ -786,7 +800,7 @@ mod tests {
     #[allow(dead_code)]
     struct DummyNonCloneFormatter;
     impl StatisticsLogFormatter for DummyNonCloneFormatter {
-        fn log_stat(&self, _logger: &StatisticsLogger<Self>, _stat: &StatLogData)
+        fn log_stat(_logger: &StatisticsLogger<Self>, _stat: &StatLogData)
         where
             Self: Sized,
         {
@@ -798,7 +812,7 @@ mod tests {
     fn check_clone() {
         let logger = StatisticsLogger::new(
             slog::Logger::root(slog::Discard, o!()),
-            StatsConfigBuilder::new(DummyNonCloneFormatter).fuse(),
+            StatsConfigBuilder::<DummyNonCloneFormatter>::new().fuse(),
         );
 
         let _new_logger: StatisticsLogger<DummyNonCloneFormatter> = logger.clone();

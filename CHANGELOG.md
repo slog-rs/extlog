@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Changed
 
+## [4.0.0]
+### Changed
+ - Some small but breaking changes to stats creation API.
+   - No longer require an instance of the formatter type.
+   - Take a list of `StatsDefinitions` so users can track stats from multiple crates in one place.
+
 ### Fixed
 - Proper `Clone` support for `StatisticsLogger`
 

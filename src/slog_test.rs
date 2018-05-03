@@ -155,9 +155,9 @@ pub fn create_logger_buffer(
 
     let logger = StatisticsLogger::new(
         logger,
-        StatsConfigBuilder::new(DefaultStatisticsLogFormatter)
+        StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
             .with_log_interval(TEST_LOG_INTERVAL)
-            .with_stats(stats)
+            .with_stats(vec![stats])
             .fuse(), // LCOV_EXCL_LINE Kcov bug?
     ); // LCOV_EXCL_LINE Kcov bug?
     (logger, data)
@@ -225,14 +225,15 @@ pub fn check_expected_stat_snaphots(
         assert_eq!(found_stat.definition.description(), stat.description);
 
         for value in stat.values.iter() {
-            let found_value = found_stat.values.iter().find(|val| {
-                val.group_values == value.group_values
-            });
+            let found_value = found_stat
+                .values
+                .iter()
+                .find(|val| val.group_values == value.group_values);
             assert!(
                 found_value.is_some(),
                 "Failed to find value with groups {:?} for stat {}",
                 value.group_values, // LCOV_EXCL_LINE
-                stat.name // LCOV_EXCL_LINE
+                stat.name           // LCOV_EXCL_LINE
             );
             let found_value = found_value.unwrap();
             assert_eq!(found_value.group_values, found_value.group_values);
