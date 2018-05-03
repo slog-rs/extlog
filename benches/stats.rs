@@ -80,8 +80,8 @@ fn setup_logger() -> StatisticsLogger<DefaultStatisticsLogFormatter> {
     let core = Core::new().expect("Failed to initialize tokio core");
     StatisticsLogger::new(
         slog::Logger::root(slog::Discard, o!()),
-        StatsConfigBuilder::new(DefaultStatisticsLogFormatter)
-            .with_stats(SLOG_TEST_STATS)
+        StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
+            .with_stats(vec![SLOG_TEST_STATS])
             .with_core(core.handle())
             .fuse(), // LCOV_EXCL_LINE Kcov bug?
     )
@@ -127,7 +127,12 @@ fn single_grouped_counter_multi_bucket(bench: &mut Bencher) {
     let logger = setup_logger();
     let mut idx = 0;
     bench.iter(|| {
-        xlog!(logger, ThirdExternalLog { name: format!("name-{}", idx) });
+        xlog!(
+            logger,
+            ThirdExternalLog {
+                name: format!("name-{}", idx),
+            }
+        );
         idx += 1;
     })
 }
@@ -162,7 +167,9 @@ fn get_stats(bench: &mut Bencher) {
         }
     );
 
-    bench.iter(|| { logger.get_stats(); })
+    bench.iter(|| {
+        logger.get_stats();
+    })
 }
 
 benchmark_group!(
