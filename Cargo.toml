@@ -1,11 +1,11 @@
 [package]
 authors = ["Metaswitch Networks Ltd"]
 name = "slog-extlog"
-version = "4.0.0"
+version = "4.1.0"
 license = "Apache-2.0"
 description = "Object-based logging and statistics tracking through logs"
-homepage = "https://github.com/Metaswitch/slog-extlog"
-repository = "https://github.com/Metaswitch/slog-extlog"
+homepage = "https://github.com/slog-rs/extlog"
+repository = "https://github.com/slog-rs/extlog"
 keywords = ["slog", "log", "logging"]
 readme = "README.md"
 
@@ -42,7 +42,7 @@ bencher = "0.1.5"
 # This is a known problem in Cargo - see
 # https://github.com/rust-lang/cargo/issues/4242 for tracking issue.
 [dev-dependencies.slog-extlog-derive]
-version = "4.0"
+version = "4.1"
 path = "slog-extlog-derive"
 
 [workspace]

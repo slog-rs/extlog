@@ -1,11 +1,11 @@
 [package]
 name = "slog-extlog-derive"
-version = "4.0.0"
+version = "4.1.0"
 authors = ["Metaswitch Networks Ltd"]
 license = "Apache-2.0"
 description = "Custom derive code for slog-extlog"
-homepage = "https://github.com/Metaswitch/slog-extlog"
-repository = "https://github.com/Metaswitch/slog-extlog"
+homepage = "https://github.com/slog-rs/extlog"
+repository = "https://github.com/slog-rs/extlog"
 keywords = ["slog", "log", "logging"]
 readme = "../README.md"
 
@@ -13,7 +13,7 @@ readme = "../README.md"
 slog =  { version = "2.1", features = ['nested-values'] }
 syn = {version = "0.11.9", features = ["full"] }
 quote = "0.3.10"
-slog-extlog = { version = "4.0", path = ".." }
+slog-extlog = { version = "4.1", path = ".." }
 serde = "1.0"
 serde_derive = "1.0"
 
