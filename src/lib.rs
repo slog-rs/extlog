@@ -36,12 +36,15 @@
 //!     `ExtLoggable` trait for this object.
 //!      - If your structure is overly complex or unusual, manually implement [`ExtLoggable`].
 //!   - Early in your program or libary, obtain or create a [`Logger`] of the correct format and
-//!   wrap it in a ['StatisticsLogger`].
+//!     wrap it in a ['StatisticsLogger`].
 //!
-//!   You can then call the [`xlog!()`] macro, passing in a [`StatisticsLogger`] and an instance of
-//!   your structure, and it will be logged according to the Logger's associated Drain as usual.
-//!   Structure parameters  will be added as key-value pairs, but with the bonus that you get
-//!   type checking.
+//! Unless you want to support statistics tracking, then the easiest way to obtain an
+//! appropriate logger is to create a [`DefaultLogger`](./type.DefaultLogger.html).
+//!
+//! You can then call the [`xlog!()`] macro, passing in the [`StatisticsLogger`] and an instance
+//! of your structure, and it will be logged according to the Logger's associated Drain as usual.
+//! Structure parameters will be added as key-value pairs, but with the bonus that you get
+//! type checking.
 //!
 //! You can continue to make developer logs simply using `slog` as normal:
 //!
@@ -86,7 +89,7 @@
 //! extern crate serde_derive;
 //! extern crate erased_serde;
 //!
-//! use slog_extlog::{ExtLoggable, stats};
+//! use slog_extlog::{DefaultLogger, ExtLoggable};
 //! use slog::Drain;
 //! use std::sync::Mutex;
 //!
@@ -126,7 +129,7 @@
 //!     let logger = slog::Logger::root(
 //!         Mutex::new(slog_json::Json::default(std::io::stdout())).map(slog::Fuse),
 //!         o!());
-//!     let foo_logger = stats::StatisticsLogger::<stats::DefaultStatisticsLogFormatter>::new(
+//!     let foo_logger = DefaultLogger::new(
 //!                        logger.new(o!("cxt" =>
 //!                          FooContext {
 //!                            id: "123456789".to_string(),
@@ -170,15 +173,16 @@ pub mod slog_test;
 /// A trait that defines requirements to be automatically derivable.
 ///
 /// Any generic parameters in `ExtLoggable` objects must have this as a trait bound.
-pub trait SlogValueDerivable
-    : std::fmt::Debug + Clone + serde::Serialize + Send + 'static {
-}
+pub trait SlogValueDerivable: std::fmt::Debug + Clone + serde::Serialize + Send + 'static {}
 
 impl<T> SlogValueDerivable for T
 where
     T: std::fmt::Debug + Clone + serde::Serialize + Send + 'static,
 {
 }
+
+/// The default logger type.
+pub type DefaultLogger = stats::StatisticsLogger<stats::DefaultStatisticsLogFormatter>;
 
 /// An object that can be logged.
 ///

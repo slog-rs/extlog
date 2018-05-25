@@ -17,9 +17,9 @@ extern crate slog_extlog_derive;
 extern crate erased_serde;
 
 use slog::Logger;
-use std::str;
-use slog_extlog::stats::{DefaultStatisticsLogFormatter, StatisticsLogger};
+use slog_extlog::DefaultLogger;
 use slog_extlog::slog_test;
+use std::str;
 
 const CRATE_LOG_NAME: &str = "SLOGTST";
 
@@ -41,7 +41,7 @@ fn test_basic_log() {
     struct BasicLog;
 
     let (logger, mut data) = create_logger("basic_log");
-    let logger = StatisticsLogger::<DefaultStatisticsLogFormatter>::new(logger, Default::default());
+    let logger = DefaultLogger::new(logger, Default::default());
     xlog!(logger, BasicLog);
     let logs = slog_test::read_json_values(&mut data);
     assert_eq!(logs.len(), 1);
@@ -72,14 +72,13 @@ fn test_derived_structs() {
     // LCOV_EXCL_STOP
 
     let (logger, mut data) = create_logger("derived_structs");
-    let logger = StatisticsLogger::<DefaultStatisticsLogFormatter>::new(logger, Default::default());
+    let logger = DefaultLogger::new(logger, Default::default());
     let foo_logger = logger.new(o!("data" => FooData {
         id: 10,
         user: "Bob".to_string(),
         count: 2,
     }));
-    let foo_logger =
-        StatisticsLogger::<DefaultStatisticsLogFormatter>::new(foo_logger, Default::default());
+    let foo_logger = DefaultLogger::new(foo_logger, Default::default());
 
     xlog!(foo_logger, FooRspRcvd(FooRspType::Ok, "Success"));
     let logs = slog_test::read_json_values(&mut data);
@@ -125,7 +124,7 @@ fn test_fixed_field() {
     };
 
     let (logger, mut data) = create_logger("fixed_field");
-    let logger = StatisticsLogger::<DefaultStatisticsLogFormatter>::new(logger, Default::default());
+    let logger = DefaultLogger::new(logger, Default::default());
     xlog!(logger, my_log);
 
     let logs = slog_test::read_json_values(&mut data);
@@ -169,7 +168,7 @@ fn test_generics() {
     // LCOV_EXCL_STOP
 
     let (logger, mut data) = create_logger("derived_structs");
-    let logger = StatisticsLogger::<DefaultStatisticsLogFormatter>::new(logger, Default::default());
+    let logger = DefaultLogger::new(logger, Default::default());
     let foo_data = FooData {
         id: 42,
         desc: "FoobarBaz",

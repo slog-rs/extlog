@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Changed
 
+## [4.1.0]
+### Added
+- Add a `DefaultLogger` for users who don't need statistics.
+- Move repository homepage.
+
 ## [4.0.0]
 ### Changed
  - Some small but breaking changes to stats creation API.

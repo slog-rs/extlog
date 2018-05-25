@@ -1,9 +1,13 @@
 
-This repository adds support for **external logs**, and for statistics tracking through those logs, to the [`slog`](https://github.com/slog-rs/slog/) ecosystem.
+This crate adds support for **external logs**, and for statistics tracking through those logs, to the [`slog`](https://github.com/slog-rs/slog/) ecosystem.
+
+This crate was written by Metaswitch Networks (@Metaswitch) and made freely available under the [Apache License](LICENSE.md).
+[Contributions](CONTRIBUTING.md) are welcome.
 
 # Overview
 
-**External logs** are logs that form an external API that end users can rely on, and that do not change without explicit agreement.
+**External logs** are logs that form an external API that end users can rely on, and that do not change without explicit agreement. Using them allows
+you to treat logs as objects, rather than strings with metadata, allowing compile-time checking of logs.
 
 This repository provides the following.
  - An API for easily defining external logs.
