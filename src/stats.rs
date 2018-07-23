@@ -28,20 +28,20 @@ extern crate futures;
 extern crate tokio_core;
 extern crate tokio_timer;
 
-use std::panic::RefUnwindSafe;
-use std::sync::Arc;
-use self::tokio_core::reactor::{Core, Handle};
-use self::tokio_timer::Timer;
 use self::futures::stream::Stream;
 use self::futures::Future;
+use self::tokio_core::reactor::{Core, Handle};
+use self::tokio_timer::Timer;
 use std::collections::HashMap;
 use std::fmt;
-use std::sync::atomic::{AtomicIsize, Ordering};
-use std::sync::RwLock;
-use std::time::Duration;
-use std::thread;
-use std::ops::Deref;
 use std::marker::PhantomData;
+use std::ops::Deref;
+use std::panic::RefUnwindSafe;
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::Arc;
+use std::sync::RwLock;
+use std::thread;
+use std::time::Duration;
 
 use super::slog;
 
@@ -175,6 +175,25 @@ pub enum ChangeType {
     SetTo(isize),
 }
 
+/// Used to represent the upper limit of a bucket
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+pub enum BucketLimit {
+    Infinite,
+    Num(f64),
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Buckets(Vec<BucketLimit>);
+
+// Enum which is used to determine which buckets to update when a BucketCounter stat is updated
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+pub enum BucketMethod {
+    // When a value is recorded, only update the bucket it lands in
+    Freq,
+    // When a value us recorded, update its bucket and every higher bucket
+    CumulFreq,
+}
+
 /// Types of statistics.  Automatically determined from the `StatDefinition`.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
 pub enum StatType {
@@ -182,6 +201,8 @@ pub enum StatType {
     Counter,
     /// A gauge - a value that represents a current value and can go up or down.
     Gauge,
+    /// A counter that is additionally grouped into numerical buckets
+    BucketCounter(BucketMethod),
 }
 // LCOV_EXCL_STOP
 
@@ -195,6 +216,7 @@ impl slog::Value for StatType {
         match *self {
             StatType::Counter => serializer.emit_str(key, "counter"),
             StatType::Gauge => serializer.emit_str(key, "gauge"),
+            StatType::BucketCounter(_) => serializer.emit_str(key, "bucket counter"),
         }
     } // LCOV_EXCL_LINE Kcov bug?
 }
