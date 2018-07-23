@@ -10,7 +10,6 @@ extern crate slog_extlog;
 #[macro_use]
 extern crate slog_extlog_derive;
 
-use slog_extlog::stats::*;
 use slog_extlog::slog_test::*;
 use std::{panic, thread, time};
 
@@ -27,7 +26,10 @@ define_stats! {
         test_grouped_counter(Counter, "Test counter grouped by name", ["name"]),
         test_double_grouped(Counter, "Test counter grouped by type and error",
                                ["name", "error"]),
-        test_latest_foo_error_count(Counter, "Latest foo error byte count", [])
+        test_latest_foo_error_count(Counter, "Latest foo error byte count", []),
+        test_bucket_counter_freq(BucketCounter, "Test bucket counter", [], (Freq, "bucket", [1,2,3,4])),
+        test_bucket_counter_cumul_freq(BucketCounter, "Test cumulative bucket counter", [], (CumulFreq, "bucket", [1,2,3,4])),
+        test_bucket_counter_grouped(BucketCounter, "Test bucket counter grouped by name and error", ["name", "error"], (Freq, "bucket", [-5, 5]))
     }
 }
 
@@ -35,10 +37,15 @@ define_stats! {
 #[LogDetails(Id = "1", Text = "Amount sent", Level = "Info")]
 #[StatTrigger(StatName = "test_counter", Action = "Incr", Value = "1")]
 #[StatTrigger(StatName = "test_second_counter", Action = "Incr", Value = "1")]
-#[StatTrigger(StatName = "test_gauge", Condition = "self.bytes < 200", Action = "Incr",
-              Value = "1")]
-#[StatTrigger(StatName = "test_second_gauge", Condition = "self.bytes > self.unbytes as u32",
-              Action = "Incr", ValueFrom = "self.bytes - (self.unbytes as u32)")]
+#[StatTrigger(
+    StatName = "test_gauge", Condition = "self.bytes < 200", Action = "Incr", Value = "1"
+)]
+#[StatTrigger(
+    StatName = "test_second_gauge",
+    Condition = "self.bytes > self.unbytes as u32",
+    Action = "Incr",
+    ValueFrom = "self.bytes - (self.unbytes as u32)"
+)]
 //LCOV_EXCL_START
 struct ExternalLog {
     bytes: u32,
@@ -47,16 +54,18 @@ struct ExternalLog {
 
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "2", Text = "Some floating point number", Level = "Error")]
-#[StatTrigger(StatName = "test_gauge", Condition = "self.floating > 1.0", Action = "Decr",
-              Value = "1")]
+#[StatTrigger(
+    StatName = "test_gauge", Condition = "self.floating > 1.0", Action = "Decr", Value = "1"
+)]
 struct SecondExternalLog {
     floating: f32,
 }
 
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "3", Text = "A string of text", Level = "Warning")]
-#[StatTrigger(StatName = "test_foo_count", Condition = "self.name == \"foo\"", Action = "Incr",
-              Value = "1")]
+#[StatTrigger(
+    StatName = "test_foo_count", Condition = "self.name == \"foo\"", Action = "Incr", Value = "1"
+)]
 #[StatTrigger(StatName = "test_grouped_counter", Action = "Incr", Value = "1")]
 struct ThirdExternalLog {
     #[StatGroup(StatName = "test_grouped_counter")]
@@ -66,8 +75,12 @@ struct ThirdExternalLog {
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "4", Text = "Some more irrelevant text", Level = "Info")]
 #[StatTrigger(StatName = "test_double_grouped", Action = "Incr", Value = "1")]
-#[StatTrigger(StatName = "test_latest_foo_error_count", Condition = "self.error != 0",
-              Action = "SetVal", ValueFrom = "self.foo_count")]
+#[StatTrigger(
+    StatName = "test_latest_foo_error_count",
+    Condition = "self.error != 0",
+    Action = "SetVal",
+    ValueFrom = "self.foo_count"
+)]
 struct FourthExternalLog {
     #[StatGroup(StatName = "test_double_grouped")]
     name: String,
@@ -75,7 +88,29 @@ struct FourthExternalLog {
     #[StatGroup(StatName = "test_double_grouped")]
     error: u8,
 }
-//LCOV_EXCL_STOP
+
+#[derive(ExtLoggable, Clone, Serialize)]
+#[LogDetails(Id = "5", Text = "Some floating point number", Level = "Error")]
+#[StatTrigger(StatName = "test_bucket_counter_freq", Action = "Incr", Value = "1")]
+#[StatTrigger(StatName = "test_bucket_counter_cumul_freq", Action = "Incr", Value = "1")]
+struct FifthExternalLog {
+    #[BucketBy(StatName = "test_bucket_counter_freq")]
+    #[BucketBy(StatName = "test_bucket_counter_cumul_freq")]
+    floating: f32,
+}
+
+#[derive(ExtLoggable, Clone, Serialize)]
+#[LogDetails(Id = "6", Text = "Some floating point number with name and error", Level = "Error")]
+#[StatTrigger(StatName = "test_bucket_counter_grouped", Action = "Incr", Value = "1")]
+struct SixthExternalLog {
+    #[StatGroup(StatName = "test_bucket_counter_grouped")]
+    name: String,
+    #[StatGroup(StatName = "test_bucket_counter_grouped")]
+    error: u8,
+    #[BucketBy(StatName = "test_bucket_counter_grouped")]
+    floating: f32,
+}
+// LCOV_EXCL_STOP
 
 // Shortcut for a standard external log of the first struct with given values.
 fn log_external_stat(
@@ -86,7 +121,7 @@ fn log_external_stat(
     xlog!(logger, ExternalLog { bytes, unbytes });
 }
 
-// Shortcut for a standard external log of the fifourthrst struct with given values.
+// Shortcut for a standard external log of the fourth struct with given values.
 fn log_external_grouped(
     logger: &StatisticsLogger<DefaultStatisticsLogFormatter>,
     name: String,
@@ -271,11 +306,13 @@ fn basic_extloggable_grouped_by_string() {
                 stat_name: "test_grouped_counter",
                 tag: Some("name=bar"),
                 value: 4f64,
+                metric_type: "counter",
             },
             ExpectedStat {
                 stat_name: "test_grouped_counter",
                 tag: Some("name=foo"),
                 value: 2f64,
+                metric_type: "counter",
             },
         ],
     );
@@ -303,26 +340,342 @@ fn basic_extloggable_grouped_by_mixed() {
                 stat_name: "test_double_grouped",
                 tag: Some("name=bar,error=0"),
                 value: 2f64,
+                metric_type: "counter",
             },
             ExpectedStat {
                 stat_name: "test_double_grouped",
                 tag: Some("name=foo,error=0"),
                 value: 1f64,
+                metric_type: "counter",
             },
             ExpectedStat {
                 stat_name: "test_double_grouped",
                 tag: Some("name=bar,error=1"),
                 value: 1f64,
+                metric_type: "counter",
             },
             ExpectedStat {
                 stat_name: "test_double_grouped",
                 tag: Some("name=foo,error=2"),
                 value: 1f64,
+                metric_type: "counter",
             },
             ExpectedStat {
                 stat_name: "test_double_grouped",
                 tag: Some("name=bar,error=2"),
                 value: 1f64,
+                metric_type: "counter",
+            },
+        ],
+    );
+}
+
+#[test]
+fn test_extloggable_bucket_counter_freq() {
+    let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
+    xlog!(logger, FifthExternalLog { floating: 2.5 });
+
+    // Wait for the stats logs.
+    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    let logs = get_stat_logs("test_bucket_counter_freq", &mut data);
+    assert_eq!(logs.len(), 5);
+
+    check_expected_stats(
+        &logs,
+        vec![
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=1"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=2"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=3"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=4"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=Unbounded"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+        ],
+    );
+}
+
+#[test]
+fn test_extloggable_bucket_counter_freq_high_value() {
+    let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
+    xlog!(
+        logger,
+        FifthExternalLog {
+            floating: 10 as f32
+        }
+    );
+
+    // Wait for the stats logs.
+    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    let logs = get_stat_logs("test_bucket_counter_freq", &mut data);
+    assert_eq!(logs.len(), 5);
+
+    check_expected_stats(
+        &logs,
+        vec![
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=1"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=2"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=3"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=4"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_freq",
+                tag: Some("bucket=Unbounded"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+        ],
+    );
+}
+
+#[test]
+fn test_extloggable_bucket_counter_cumul_freq() {
+    let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
+    xlog!(logger, FifthExternalLog { floating: 2.5 });
+
+    // Wait for the stats logs.
+    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    let logs = get_stat_logs("test_bucket_counter_cumul_freq", &mut data);
+    assert_eq!(logs.len(), 5);
+
+    check_expected_stats(
+        &logs,
+        vec![
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=1"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=2"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=3"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=4"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=Unbounded"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+        ],
+    );
+}
+
+#[test]
+fn test_extloggable_bucket_counter_cumul_freq_high_value() {
+    let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
+    xlog!(logger, FifthExternalLog { floating: 8 as f32 });
+
+    // Wait for the stats logs.
+    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    let logs = get_stat_logs("test_bucket_counter_cumul_freq", &mut data);
+    assert_eq!(logs.len(), 5);
+
+    check_expected_stats(
+        &logs,
+        vec![
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=1"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=2"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=3"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=4"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_cumul_freq",
+                tag: Some("bucket=Unbounded"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+        ],
+    );
+}
+
+#[test]
+fn test_extloggable_buckets_and_repeated_tags() {
+    let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
+    xlog!(
+        logger,
+        SixthExternalLog {
+            name: "name".to_string(),
+            error: 3,
+            floating: -1f32
+        }
+    );
+    xlog!(
+        logger,
+        SixthExternalLog {
+            name: "name".to_string(),
+            error: 3,
+            floating: 7f32
+        }
+    );
+
+    // Wait for the stats logs.
+    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    let logs = get_stat_logs("test_bucket_counter_grouped", &mut data);
+    assert_eq!(logs.len(), 3);
+
+    check_expected_stats(
+        &logs,
+        vec![
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=name,error=3,bucket=-5"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=name,error=3,bucket=5"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=name,error=3,bucket=Unbounded"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+        ],
+    );
+}
+
+#[test]
+fn test_extloggable_bucket_counter_grouped() {
+    let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
+    xlog!(
+        logger,
+        SixthExternalLog {
+            name: "first".to_string(),
+            error: 1,
+            floating: -7 as f32
+        }
+    );
+    xlog!(
+        logger,
+        SixthExternalLog {
+            name: "second".to_string(),
+            error: 2,
+            floating: 3.7634 as f32
+        }
+    );
+
+    // Wait for the stats logs.
+    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    let logs = get_stat_logs("test_bucket_counter_grouped", &mut data);
+    assert_eq!(logs.len(), 6);
+
+    check_expected_stats(
+        &logs,
+        vec![
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=first,error=1,bucket=-5"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=first,error=1,bucket=5"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=first,error=1,bucket=Unbounded"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=second,error=2,bucket=-5"),
+                value: 0f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=second,error=2,bucket=5"),
+                value: 1f64,
+                metric_type: "bucket counter",
+            },
+            ExpectedStat {
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=second,error=2,bucket=Unbounded"),
+                value: 0f64,
+                metric_type: "bucket counter",
             },
         ],
     );

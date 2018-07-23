@@ -59,10 +59,10 @@ pub extern crate slog_json;
 pub use super::stats::*;
 
 use super::slog;
-use std::sync::Mutex;
 use std::io;
 #[allow(unused_imports)] // we need this trait for lines()
 use std::io::BufRead;
+use std::sync::Mutex;
 
 /// Create a new test logger suitable for use with `read_json_values`.
 pub fn new_test_logger<T: io::Write + Send + 'static>(stream: T) -> slog::Logger {
@@ -168,6 +168,7 @@ pub struct ExpectedStat {
     pub stat_name: &'static str,
     pub tag: Option<&'static str>,
     pub value: f64,
+    pub metric_type: &'static str,
 }
 
 /// Asserts that a set of logs (retrieved using `logs_in_range)` is exactly equal to an
@@ -181,7 +182,7 @@ pub fn check_expected_stats(logs: &[serde_json::Value], mut expected_stats: Vec<
             if log["name"] == exp.stat_name
                 && (exp.tag.is_none() || log["tags"] == exp.tag.unwrap())
             {
-                assert_eq!(logs[0]["metric_type"], "counter");
+                assert_eq!(logs[0]["metric_type"], exp.metric_type);
                 assert_eq!(log["value"].as_f64(), Some(exp.value));
                 matched = Some(id);
                 break;
@@ -207,6 +208,7 @@ pub struct ExpectedStatSnapshot {
 pub struct ExpectedStatSnapshotValue {
     pub group_values: Vec<String>,
     pub value: f64,
+    pub bucket_index: Option<usize>,
 }
 // LCOV_EXCL_STOP
 
@@ -225,19 +227,20 @@ pub fn check_expected_stat_snaphots(
         assert_eq!(found_stat.definition.description(), stat.description);
 
         for value in stat.values.iter() {
-            let found_value = found_stat
-                .values
-                .iter()
-                .find(|val| val.group_values == value.group_values);
+            let found_value = found_stat.values.iter().find(|val| {
+                val.group_values == value.group_values && val.bucket_index == value.bucket_index
+            });
             assert!(
                 found_value.is_some(),
-                "Failed to find value with groups {:?} for stat {}",
+                "Failed to find value with groups {:?} and bucket_index {:?} for stat {}",
                 value.group_values, // LCOV_EXCL_LINE
+                value.bucket_index, // LCOV_EXCL_LINE
                 stat.name           // LCOV_EXCL_LINE
             );
             let found_value = found_value.unwrap();
             assert_eq!(found_value.group_values, found_value.group_values);
             assert_eq!(found_value.value, value.value);
+            assert_eq!(found_value.bucket_index, value.bucket_index);
         }
 
         assert_eq!(found_stat.values.len(), stat.values.len());
