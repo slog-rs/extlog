@@ -66,6 +66,8 @@ pub trait StatDefinition: fmt::Debug {
     fn stype(&self) -> StatType;
     /// An optional list of field names to group the statistic by.
     fn group_by(&self) -> Vec<&'static str>;
+
+    fn buckets(&self) -> Buckets;
 }
 
 /// A macro to define the statistics that can be tracked by the logger.
@@ -104,10 +106,52 @@ pub trait StatDefinition: fmt::Debug {
 ///     - Use of this feature should be avoided for fields that can take very many values, such as
 ///   a subscriber number, or for large numbers of tags - each tag name and seen value adds a
 ///   performance dip and a small memory overhead that is never freed.
+// #[macro_export]
+// macro_rules! define_stats {
+//     // Entry point - match the full list
+//     ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*])),*}) => {
+//         /// The list of statistics.
+//         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
+
+//         mod inner_stats {
+//         $(
+//                #[derive(Debug, Clone)]
+//                // Prometheus metrics are snake_case, so allow non-camel-case types here.
+//                #[allow(non_camel_case_types)]
+//                pub struct $stat;
+//             )*
+//         }
+//         $(define_stats!{@single $stat, $stype, $desc, $($tags),*})*
+//     };
+
+//       // Trait impl for StatDefinition
+//     (@single $stat:ident, $stype:ident, $desc:expr, $($tags:tt),*) => {
+
+//         // Suppress the warning about cases - this value is never going to be seen
+//         #[allow(non_upper_case_globals)]
+//         static $stat : inner_stats::$stat = inner_stats::$stat;
+
+//         impl $crate::stats::StatDefinition for inner_stats::$stat {
+//             /// The name of this statistic.
+//             fn name(&self) -> &'static str { stringify!($stat) }
+//             /// A human readable-description of the statistic, describing its meaning.
+//             fn description(&self) -> &'static str { $desc }
+//             /// The type
+//             fn stype(&self) -> $crate::stats::StatType { $crate::stats::StatType::$stype }
+//             /// An optional list of field names to group the statistic by.
+//             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
+//         }
+//     };
+
+//     ($name:ident = {$($stat:ident($stype:ident, $id:expr, $desc:expr, [$($tags:tt),*])),*}) => {
+//         define_stats! { $name = {$($stat($stype, $desc, [$($tags),*])),*} }
+//     };
+// }
+
 #[macro_export]
 macro_rules! define_stats {
     // Entry point - match the full list
-    ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*])),*}) => {
+    ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*], ($bmethod:ident, [$($blimits:tt),*]))),*}) => {
         /// The list of statistics.
         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
 
@@ -119,11 +163,11 @@ macro_rules! define_stats {
                pub struct $stat;
             )*
         }
-        $(define_stats!{@single $stat, $stype, $desc, $($tags),*})*
+        $(define_stats!{@single $stat, $stype, $desc, $bmethod, [$($tags),*], [$($blimits:tt),*]})*
     };
 
       // Trait impl for StatDefinition
-    (@single $stat:ident, $stype:ident, $desc:expr, $($tags:tt),*) => {
+    (@single $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:tt),*]) => {
 
         // Suppress the warning about cases - this value is never going to be seen
         #[allow(non_upper_case_globals)]
@@ -138,12 +182,19 @@ macro_rules! define_stats {
             fn stype(&self) -> $crate::stats::StatType { $crate::stats::StatType::$stype }
             /// An optional list of field names to group the statistic by.
             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
+
+            fn buckets(&self) -> Buckets {
+                $crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod, vec![$($blimits),*])
+            }
         }
     };
 
     ($name:ident = {$($stat:ident($stype:ident, $id:expr, $desc:expr, [$($tags:tt),*])),*}) => {
         define_stats! { $name = {$($stat($stype, $desc, [$($tags),*])),*} }
     };
+    ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*])),*}) => {
+        define_stats! { $name = {$($stat($stype, $desc,  [$($tags),*], (Freq, []))),*} }
+    }
 }
 
 /// A trait indicating that this statistic can be used to trigger a statistics change.
@@ -187,7 +238,18 @@ pub enum BucketLimit {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
-pub struct Buckets(Vec<BucketLimit>);
+pub struct Buckets {
+    method: BucketMethod,
+    limits: Vec<BucketLimit>,
+}
+
+impl Buckets {
+    pub fn new(method: BucketMethod, limits: Vec<f64>) -> Buckets {
+        let mut limits: Vec<BucketLimit> = limits.iter().map(|f| BucketLimit::Num(*f)).collect();
+        limits.push(BucketLimit::Infinite);
+        Buckets { method, limits }
+    }
+}
 
 // Enum which is used to determine which buckets to update when a BucketCounter stat is updated
 #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
@@ -206,7 +268,7 @@ pub enum StatType {
     /// A gauge - a value that represents a current value and can go up or down.
     Gauge,
     /// A counter that is additionally grouped into numerical buckets
-    BucketCounter(BucketMethod),
+    BucketCounter,
 }
 // LCOV_EXCL_STOP
 
@@ -220,7 +282,7 @@ impl slog::Value for StatType {
         match *self {
             StatType::Counter => serializer.emit_str(key, "counter"),
             StatType::Gauge => serializer.emit_str(key, "gauge"),
-            StatType::BucketCounter(_) => serializer.emit_str(key, "bucket counter"),
+            StatType::BucketCounter => serializer.emit_str(key, "bucket counter"),
         }
     } // LCOV_EXCL_LINE Kcov bug?
 }
