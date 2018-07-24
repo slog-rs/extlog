@@ -208,6 +208,7 @@ struct StatTriggerData {
     action: StatTriggerAction,
     val: StatTriggerValue,
     group_by: Vec<syn::Ident>,
+    // bucket_data: Option<BucketData>,
 }
 
 /// Generate implementations of the `slog::Value` trait.
@@ -380,6 +381,22 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
             },
         }
     }
+
+    // let mut buckets = quote!{};
+    // for t in &triggers {
+    //     let id = &t.id.to_string();
+    //     let bucket_data = t.bucket_data.clone();
+    //     let bucket_field_str = bucket_data.bucket_field_id.to_string();
+    //     buckets = quote! { #buckets
+    //         #id => {
+    //             if let Some(bucket_data) = bucket_data {
+
+    //             } else {
+    //                 None
+    //             }
+    //         },
+    //     }
+    // }
 
     // Tweak to ensure we avoid unused variable warnings in `get_tag_value()`.
     let tag_name_ident = if !triggers.is_empty() {
@@ -693,21 +710,21 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
         vec![]
     };
 
-    let bucket_data = if let syn::Body::Struct(syn::VariantData::Struct(ref fields)) = *body {
-        let bucket_field = fields.iter().find(|f| {
-            f.attrs
-                .iter()
-                .any(|a| a.name() == "BucketBy" && is_attr_stat_id(a, &id))
-        });
+    // let bucket_data = if let syn::Body::Struct(syn::VariantData::Struct(ref fields)) = *body {
+    //     let bucket_field = fields.iter().find(|f| {
+    //         f.attrs
+    //             .iter()
+    //             .any(|a| a.name() == "BucketBy" && is_attr_stat_id(a, &id))
+    //     });
 
-        if let Some(bucket_field) = bucket_field {
-            Some(parse_buckets(bucket_field, &id))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    //     if let Some(bucket_field) = bucket_field {
+    //         Some(parse_buckets(bucket_field, &id))
+    //     } else {
+    //         None
+    //     }
+    // } else {
+    //     None
+    // };
 
     StatTriggerData {
         id,
@@ -717,40 +734,41 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
         action: action.expect("StatTrigger missing value for Action"),
         val: value.expect("StatTrigger missing value for Value or ValueFrom"),
         group_by: groups,
+        // bucket_data,
     }
 }
 // LCOV_EXCL_STOP
 //
 
-struct BucketData {
-    bucket_field_id: syn::Ident,
-    bucket_limits: Vec<f64>,
-}
+// struct BucketData {
+//     bucket_field_id: syn::Ident,
+//     bucket_limits: Vec<f64>,
+// }
 
-fn parse_buckets(field: &syn::Field, id: &syn::Ident) -> BucketData {
-    let attr = field
-        .attrs
-        .iter()
-        .find(|a| a.name() == "BucketBy" && is_attr_stat_id(a, id))
-        .expect("didn't find BucketBy attribute");
+// fn parse_buckets(field: &syn::Field, id: &syn::Ident) -> BucketData {
+//     let attr = field
+//         .attrs
+//         .iter()
+//         .find(|a| a.name() == "BucketBy" && is_attr_stat_id(a, id))
+//         .expect("didn't find BucketBy attribute");
 
-    let bucket_limits = if let syn::MetaItem::List(_, ref items) = attr.value {
-        items
-            .iter()
-            .map(|item| {
-                if let syn::NestedMetaItem::Literal(syn::Lit::Float(s, _)) = item {
-                    s.parse::<f64>().expect("Could not parse a bucket value")
-                } else {
-                    panic!("Could not parse a bucket value");
-                }
-            })
-            .collect()
-    } else {
-        panic!("Could not parse a bucket value");
-    };
+//     let bucket_limits = if let syn::MetaItem::List(_, ref items) = attr.value {
+//         items
+//             .iter()
+//             .map(|item| {
+//                 if let syn::NestedMetaItem::Literal(syn::Lit::Float(s, _)) = item {
+//                     s.parse::<f64>().expect("Could not parse a bucket value")
+//                 } else {
+//                     panic!("Could not parse a bucket value");
+//                 }
+//             })
+//             .collect()
+//     } else {
+//         panic!("Could not parse a bucket value");
+//     };
 
-    BucketData {
-        bucket_field_id: field.ident.clone().expect("No ident"),
-        bucket_limits,
-    }
-}
+//     BucketData {
+//         bucket_field_id: field.ident.clone().expect("No ident"),
+//         bucket_limits,
+//     }
+// }

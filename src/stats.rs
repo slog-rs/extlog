@@ -162,7 +162,9 @@ pub trait StatTrigger {
         None
     }
 
-    // fn buckets(&self, stat_id: &StatDefinition, value: f64) -> Buckets;
+    // fn buckets(&self, stat_id: &StatDefinition, value: f64) -> Option<Buckets> {
+    //     None
+    // }
 }
 
 /// Types of changes made to a statistic.
