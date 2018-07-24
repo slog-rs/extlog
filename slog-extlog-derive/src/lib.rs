@@ -208,6 +208,7 @@ struct StatTriggerData {
     action: StatTriggerAction,
     val: StatTriggerValue,
     group_by: Vec<syn::Ident>,
+    bucket_by: Option<syn::Ident>,
     // bucket_data: Option<BucketData>,
 }
 
@@ -232,7 +233,9 @@ pub fn slog_value(input: TokenStream) -> TokenStream {
 /// Generate implementations of the [`ExtLoggable`](../slog_extlog/trait.ExtLoggable.html) trait.
 ///
 /// Do not call this function directly.  Use `#[derive]` instead.
-#[proc_macro_derive(ExtLoggable, attributes(LogDetails, FixedFields, StatTrigger, StatGroup))]
+#[proc_macro_derive(
+    ExtLoggable, attributes(LogDetails, FixedFields, StatTrigger, StatGroup, BucketBy)
+)]
 pub fn loggable(input: TokenStream) -> TokenStream {
     // Construct a string representation of the type definition
     let s = input.to_string();
@@ -382,6 +385,23 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         }
     }
 
+    // Build up the bucket info for each stat.
+    let mut stats_buckets = quote!{};
+    for t in &triggers {
+        let id = &t.id.to_string();
+        let bucket = t.bucket_by.clone();
+        if let Some(bucket) = bucket {
+            let bucket_str = bucket.to_string();
+            stats_buckets = quote! { #stats_buckets
+                #id => Some(self.#bucket_str),
+            }
+        } else {
+            stats_buckets = quote! { #stats_buckets
+                #id => None,
+            }
+        }
+    }
+
     // let mut buckets = quote!{};
     // for t in &triggers {
     //     let id = &t.id.to_string();
@@ -455,6 +475,15 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
                 match stat_id.name() {
                     #stats_groups
                     _ => "".to_string(),
+                }
+            }
+
+            /// The value to be used to sort the stat into buckets
+            fn bucket_value(&self,
+                         stat_id: &::slog_extlog::stats::StatDefinition) -> Option<f64> {
+                match stat_id.name() {
+                    # stats_buckets
+                    _ => None,
                 }
             }
         }
@@ -710,6 +739,27 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
         vec![]
     };
 
+    let bucket_field = if let syn::Body::Struct(syn::VariantData::Struct(ref all_fields)) = *body {
+        let bucket_by_fields = all_fields
+            .iter()
+            .filter(|f| {
+                f.attrs
+                    .iter()
+                    .any(|a| a.name() == "BucketBy" && is_attr_stat_id(a, &id))
+            })
+            .map(|f| f.clone().ident.expect("No identifier for field!"))
+            .collect::<Vec<_>>();
+
+        assert!(
+            bucket_by_fields.len() <= 1,
+            "The BucketBy attribute can be added to at most one field"
+        );
+
+        bucket_by_fields.into_iter().next()
+    } else {
+        None
+    };
+
     // let bucket_data = if let syn::Body::Struct(syn::VariantData::Struct(ref fields)) = *body {
     //     let bucket_field = fields.iter().find(|f| {
     //         f.attrs
@@ -734,7 +784,7 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
         action: action.expect("StatTrigger missing value for Action"),
         val: value.expect("StatTrigger missing value for Value or ValueFrom"),
         group_by: groups,
-        // bucket_data,
+        bucket_by: bucket_field,
     }
 }
 // LCOV_EXCL_STOP

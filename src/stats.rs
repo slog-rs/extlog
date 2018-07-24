@@ -67,7 +67,7 @@ pub trait StatDefinition: fmt::Debug {
     /// An optional list of field names to group the statistic by.
     fn group_by(&self) -> Vec<&'static str>;
 
-    fn buckets(&self) -> Buckets;
+    fn buckets(&self) -> &'static Buckets;
 }
 
 /// A macro to define the statistics that can be tracked by the logger.
@@ -168,10 +168,10 @@ macro_rules! define_stats {
 
       // Trait impl for StatDefinition
     (@single $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:tt),*]) => {
-
         // Suppress the warning about cases - this value is never going to be seen
         #[allow(non_upper_case_globals)]
         static $stat : inner_stats::$stat = inner_stats::$stat;
+            // static BUCKETS : $crate::stats::Bucket = $crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod, vec![$($blimits),*]);
 
         impl $crate::stats::StatDefinition for inner_stats::$stat {
             /// The name of this statistic.
@@ -183,8 +183,9 @@ macro_rules! define_stats {
             /// An optional list of field names to group the statistic by.
             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
 
-            fn buckets(&self) -> Buckets {
-                $crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod, vec![$($blimits),*])
+            fn buckets(&self) -> &'static Buckets {
+                // &$stat::BUCKETS
+                panic!();
             }
         }
     };
@@ -210,6 +211,9 @@ pub trait StatTrigger {
     fn tag_value(&self, stat_id: &StatDefinition, _tag_name: &'static str) -> String;
     /// The details of the change to make for this stat, if `condition` returned true.
     fn change(&self, _stat_id: &StatDefinition) -> Option<ChangeType> {
+        None
+    }
+    fn bucket_value(&self, _stat_id: &StatDefinition) -> Option<f64> {
         None
     }
 }
