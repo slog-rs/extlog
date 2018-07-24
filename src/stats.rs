@@ -233,8 +233,25 @@ pub enum ChangeType {
 /// Used to represent the upper limit of a bucket
 #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
 pub enum BucketLimit {
-    Infinite,
     Num(f64),
+    Infinite,
+}
+
+impl BucketLimit {
+    pub fn min<'a>(l1: &'a BucketLimit, l2: &'a BucketLimit) -> &'a BucketLimit {
+        match (l1, l2) {
+            (BucketLimit::Num(f1), BucketLimit::Num(f2)) => {
+                if f1 <= f2 {
+                    l1
+                } else {
+                    l2
+                }
+            }
+            (BucketLimit::Num(f), BucketLimit::Infinite) => l1,
+            (BucketLimit::Infinite, BucketLimit::Num(f)) => l2,
+            _ => l2,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -248,6 +265,25 @@ impl Buckets {
         let mut limits: Vec<BucketLimit> = limits.iter().map(|f| BucketLimit::Num(*f)).collect();
         limits.push(BucketLimit::Infinite);
         Buckets { method, limits }
+    }
+
+    pub fn sort_value(&self, value: f64) -> Vec<&BucketLimit> {
+        match self.method {
+            CumulFreq => self.limits
+                .iter()
+                .filter(|limit| match limit {
+                    BucketLimit::Num(l) => (value <= *l),
+                    BucketLimit::Infinite => true,
+                })
+                .collect(),
+            Freq => {
+                let mut min_limit = &BucketLimit::Infinite;
+                for limit in self.limits.iter() {
+                    min_limit = BucketLimit::min(&min_limit, &limit);
+                }
+                vec![min_limit]
+            }
+        }
     }
 }
 
