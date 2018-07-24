@@ -212,10 +212,6 @@ pub trait StatTrigger {
     fn change(&self, _stat_id: &StatDefinition) -> Option<ChangeType> {
         None
     }
-
-    // fn buckets(&self, stat_id: &StatDefinition, value: f64) -> Option<Buckets> {
-    //     None
-    // }
 }
 
 /// Types of changes made to a statistic.
@@ -247,8 +243,8 @@ impl BucketLimit {
                     l2
                 }
             }
-            (BucketLimit::Num(f), BucketLimit::Infinite) => l1,
-            (BucketLimit::Infinite, BucketLimit::Num(f)) => l2,
+            (BucketLimit::Num(_), BucketLimit::Infinite) => l1,
+            (BucketLimit::Infinite, BucketLimit::Num(_)) => l2,
             _ => l2,
         }
     }
@@ -269,17 +265,21 @@ impl Buckets {
 
     pub fn sort_value(&self, value: f64) -> Vec<&BucketLimit> {
         match self.method {
-            CumulFreq => self.limits
+            BucketMethod::CumulFreq => self.limits
                 .iter()
                 .filter(|limit| match limit {
-                    BucketLimit::Num(l) => (value <= *l),
+                    BucketLimit::Num(f) => (value <= *f),
                     BucketLimit::Infinite => true,
                 })
                 .collect(),
-            Freq => {
+            BucketMethod::Freq => {
                 let mut min_limit = &BucketLimit::Infinite;
                 for limit in self.limits.iter() {
-                    min_limit = BucketLimit::min(&min_limit, &limit);
+                    if let BucketLimit::Num(f) = limit {
+                        if value <= *f {
+                            min_limit = BucketLimit::min(&min_limit, &limit);
+                        }
+                    }
                 }
                 vec![min_limit]
             }
