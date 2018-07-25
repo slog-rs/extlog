@@ -240,26 +240,19 @@ pub enum BucketLimit {
 }
 
 impl BucketLimit {
-    pub fn min<'a>(l1: &'a BucketLimit, l2: &'a BucketLimit) -> &'a BucketLimit {
-        match (l1, l2) {
-            (BucketLimit::Num(f1), BucketLimit::Num(f2)) => {
-                if f1 <= f2 {
-                    l1
-                } else {
-                    l2
-                }
-            }
-            (BucketLimit::Num(_), BucketLimit::Infinite) => l1,
-            (BucketLimit::Infinite, BucketLimit::Num(_)) => l2,
-            _ => l2,
+    pub fn le<'a>(&self, other: &BucketLimit) -> bool {
+        match (self, other) {
+            (BucketLimit::Num(f1), BucketLimit::Num(f2)) => f1 <= f2,
+            (BucketLimit::Infinite, BucketLimit::Num(_)) => false,
+            _ => true,
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Buckets {
-    pub method: BucketMethod,
-    pub limits: Vec<BucketLimit>,
+    method: BucketMethod,
+    limits: Vec<BucketLimit>,
 }
 
 impl Buckets {
@@ -269,25 +262,27 @@ impl Buckets {
         Buckets { method, limits }
     }
 
-    pub fn sort_value(&self, value: f64) -> Vec<&BucketLimit> {
+    pub fn sort_value(&self, value: f64) -> Vec<usize> {
         match self.method {
             BucketMethod::CumulFreq => self.limits
                 .iter()
-                .filter(|limit| match limit {
+                .enumerate()
+                .filter(|(_, limit)| match limit {
                     BucketLimit::Num(f) => (value <= *f),
                     BucketLimit::Infinite => true,
                 })
+                .map(|(i, _)| i)
                 .collect(),
             BucketMethod::Freq => {
-                let mut min_limit = &BucketLimit::Infinite;
-                for limit in self.limits.iter() {
+                let mut min_limit_index = self.limits.len() - 1;
+                for (i, limit) in self.limits.iter().enumerate() {
                     if let BucketLimit::Num(f) = limit {
-                        if value <= *f {
-                            min_limit = BucketLimit::min(&min_limit, &limit);
+                        if value <= *f && limit.le(&self.limits[i]) {
+                            min_limit_index = i
                         }
                     }
                 }
-                vec![min_limit]
+                vec![min_limit_index]
             }
         }
     }
