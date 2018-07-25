@@ -106,10 +106,11 @@ pub trait StatDefinition: fmt::Debug {
 ///     - Use of this feature should be avoided for fields that can take very many values, such as
 ///   a subscriber number, or for large numbers of tags - each tag name and seen value adds a
 ///   performance dip and a small memory overhead that is never freed.
+
 // #[macro_export]
 // macro_rules! define_stats {
 //     // Entry point - match the full list
-//     ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*])),*}) => {
+//     ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*], ($bmethod:ident, [$($blimits:tt),*]))),*}) => {
 //         /// The list of statistics.
 //         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
 
@@ -121,11 +122,12 @@ pub trait StatDefinition: fmt::Debug {
 //                pub struct $stat;
 //             )*
 //         }
-//         $(define_stats!{@single $stat, $stype, $desc, $($tags),*})*
+
+//         $(define_stats!{@single $stat, $stype, $desc, $bmethod, [$($tags),*], [$($blimits:tt),*]})*
 //     };
 
 //       // Trait impl for StatDefinition
-//     (@single $stat:ident, $stype:ident, $desc:expr, $($tags:tt),*) => {
+//     (@single $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:tt),*]) => {
 
 //         // Suppress the warning about cases - this value is never going to be seen
 //         #[allow(non_upper_case_globals)]
@@ -140,35 +142,59 @@ pub trait StatDefinition: fmt::Debug {
 //             fn stype(&self) -> $crate::stats::StatType { $crate::stats::StatType::$stype }
 //             /// An optional list of field names to group the statistic by.
 //             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
+
+//             fn buckets(&self) -> Option<Buckets> {
+//                 match self.stype() {
+//                     $crate::stats::StatType::BucketCounter => {
+//                         Some($crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
+//                             vec![$($blimits),* ],
+//                         ))
+//                     },
+//                     _ => None
+//                 }
+//             }
 //         }
 //     };
 
 //     ($name:ident = {$($stat:ident($stype:ident, $id:expr, $desc:expr, [$($tags:tt),*])),*}) => {
 //         define_stats! { $name = {$($stat($stype, $desc, [$($tags),*])),*} }
 //     };
+//     ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*])),*}) => {
+//         define_stats! { $name = {$($stat($stype, $desc,  [$($tags),*], (Freq, []))),*} }
+//     }
 // }
+
 
 #[macro_export]
 macro_rules! define_stats {
-    // Entry point - match the full list
-    ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*], ($bmethod:ident, [$($blimits:tt),*]))),*}) => {
-        /// The list of statistics.
+
+    ($name:ident = {$($stat:ident($($details:tt),*)),*}) => {
         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
 
         mod inner_stats {
-        $(
-               #[derive(Debug, Clone)]
-               // Prometheus metrics are snake_case, so allow non-camel-case types here.
-               #[allow(non_camel_case_types)]
-               pub struct $stat;
+            $(
+                #[derive(Debug, Clone)]
+                // Prometheus metrics are snake_case, so allow non-camel-case types here.
+                #[allow(non_camel_case_types)]
+                pub struct $stat;
             )*
         }
 
-        $(define_stats!{@single $stat, $stype, $desc, $bmethod, [$($tags),*], [$($blimits:tt),*]})*
+        $(
+            define_stats!{@single $stat, $($details),*}
+        )*
+    };
+
+    (@single $stat:ident, BucketCounter($bmethod:ident, [$($blimits:tt),*]), $desc:expr, [$($tags:tt),*] ) => {
+        define_stats!{@inner $stat, BucketCounter, $desc, $bmethod, [$($tags),*], [$($blimits:tt),*]}
+    };
+
+    (@single $stat:ident, $stype:ident, $desc:expr, [$($tags:tt),*] ) => {
+        define_stats!{@inner $stat, $stype, $desc, Freq, [$($tags),*], []}
     };
 
       // Trait impl for StatDefinition
-    (@single $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:tt),*]) => {
+    (@inner $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:tt),*]) => {
 
         // Suppress the warning about cases - this value is never going to be seen
         #[allow(non_upper_case_globals)]
@@ -200,9 +226,6 @@ macro_rules! define_stats {
     ($name:ident = {$($stat:ident($stype:ident, $id:expr, $desc:expr, [$($tags:tt),*])),*}) => {
         define_stats! { $name = {$($stat($stype, $desc, [$($tags),*])),*} }
     };
-    ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*])),*}) => {
-        define_stats! { $name = {$($stat($stype, $desc,  [$($tags),*], (Freq, []))),*} }
-    }
 }
 
 /// A trait indicating that this statistic can be used to trigger a statistics change.
@@ -268,7 +291,7 @@ impl Buckets {
     }
 
     // return a vector containing the indices of the buckets that should be updated
-    pub fn sort_value(&self, value: f64) -> Vec<usize> {
+    pub fn assign_buckets(&self, value: f64) -> Vec<usize> {
         match self.method {
             BucketMethod::CumulFreq => self.limits
                 .iter()
@@ -790,7 +813,7 @@ impl StatSnapshot {
     }
 }
 
-/// A snapshot of a current (possibly groupedl) value for a stat.
+/// A snapshot of a current (possibly grouped) value for a stat.
 // LCOV_EXCL_START not interesting to track automatic derive coverage
 #[derive(Debug)]
 pub struct StatSnapshotValue {
@@ -871,7 +894,7 @@ impl Stat {
 
         if let Some(ref buckets) = self.buckets {
             let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
-            let buckets_to_update = buckets.sort_value(bucket_value);
+            let buckets_to_update = buckets.assign_buckets(bucket_value);
 
             for index in buckets_to_update.iter() {
 
@@ -896,7 +919,6 @@ impl Stat {
 
                     update_tagged_value(lock, &trigger.change(defn).expect("Bad log definition"), tag_values);
                 }
-
             }
         }
     }
