@@ -366,7 +366,7 @@ where
     /// Add a new statistic to this tracker.
     pub fn add_statistic(&mut self, defn: &'static (StatDefinition + Sync + RefUnwindSafe)) {
 
-        let (is_bucketed,
+        let (buckets,
              bucket_values,
              bucket_group_values
         ) = if let Some(buckets) = defn.buckets(){
@@ -377,20 +377,20 @@ where
             bucket_group_values.reserve_exact(buckets_len);
             for _ in 1..buckets_len {
                 bucket_values.push(StatValue::new(0, 1));
-                bucket_group_values.push(HashMap::new());
+                bucket_group_values.push(RwLock::new(HashMap::new()));
             }
-            (true, bucket_values, bucket_group_values)
+            (Some(buckets), bucket_values, bucket_group_values)
         } else {
-            (false, Vec::new(), Vec::new())
+            (None, Vec::new(), Vec::new())
         };
 
         let stat = Stat {
             defn,
             is_grouped: !defn.group_by().is_empty(),
             group_values: RwLock::new(HashMap::new()),
-            is_bucketed,
+            buckets,
             bucket_values: RwLock::new(bucket_values),
-            bucket_group_values: RwLock::new(bucket_group_values),
+            bucket_group_values: bucket_group_values,
             value: StatValue::new(0, 1),
         }; // LCOV_EXCL_LINE Kcov bug?
 
@@ -411,11 +411,7 @@ where
                         defn.name()
                     )
                 });
-                stat.value
-                    .update(&log.change(*defn).expect("Bad log definition"));
-                // If this is a grouped stat, then we may also need to update the grouped
-                // value.
-                stat.check_update_grouped(*defn, log)
+                stat.update(*defn, log)
             }
         }
     }
@@ -830,11 +826,11 @@ struct Stat {
     // The fields the stat is grouped by.  If empty, then there is no grouping.
     group_values: RwLock<HashMap<String, StatValue>>,
 
-    is_bucketed: bool,
+    buckets: Option<Buckets>,
 
     bucket_values: RwLock<Vec<StatValue>>,
 
-    bucket_group_values: RwLock<Vec<HashMap<String, StatValue>>>,
+    bucket_group_values: Vec<RwLock<HashMap<String, StatValue>>>,
 }
 // LCOV_EXCL_STOP
 
@@ -859,15 +855,9 @@ impl Stat {
             .collect()
     }
 
-    // fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
-    //     self.value.update(&log.change(*defn).expect("Bad log definition"));
+    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
+        self.value.update(&trigger.change(defn).expect("Bad log definition"));
 
-
-    // }
-
-    // Check if the stat is grouped, and if so, get and update the correct
-    // grouped values.
-    fn check_update_grouped(&self, defn: &StatDefinition, trigger: &StatTrigger) {
         if self.is_grouped {
             let tag_values = self.defn
                 .group_by()
@@ -876,24 +866,38 @@ impl Stat {
                 .collect::<Vec<String>>()
                 .join(","); // LCOV_EXCL_LINE Kcov bug?
 
-            // Use an inner block here to ensure the read lock drops out of scope.
-            {
-                let inner_vals = self.group_values.read().expect("Poisoned lock");
-                if let Some(val) = inner_vals.get(&tag_values) {
-                    val.update(&trigger.change(defn).expect("Bad log definition"));
-                    return;
+            update_tagged_value(&self.group_values, &trigger.change(defn).expect("Bad log definition"), tag_values);
+        }
+
+        if let Some(ref buckets) = self.buckets {
+            let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
+            let buckets_to_update = buckets.sort_value(bucket_value);
+
+            for index in buckets_to_update.iter() {
+
+                // Use an inner block here to ensure the read lock drops out of scope.
+                {
+                    let inner_vals = self.bucket_values.read().expect("Poisoned lock");
+                    inner_vals
+                        .get(*index)
+                        .expect("Invalid bucket index")
+                        .update(&trigger.change(defn).expect("Bad log definition"));
                 }
+
+                if self.is_grouped {
+                    let tag_values = self.defn
+                        .group_by()
+                        .iter()
+                        .map(|n| trigger.tag_value(defn, n))
+                        .collect::<Vec<String>>()
+                        .join(","); // LCOV_EXCL_LINE Kcov bug?
+
+                    let lock = &self.bucket_group_values.get(*index).expect("Invalid bucket index");
+
+                    update_tagged_value(lock, &trigger.change(defn).expect("Bad log definition"), tag_values);
+                }
+
             }
-
-            // We didn't find a grouped value.  Get the write lock on the map so we can add it.
-            let mut inner_vals = self.group_values.write().expect("Poisoned lock");
-            // It's possible that while we were waiting for the write lock another thread got
-            // in and created the stat entry, so check again.
-            let val = inner_vals
-                .entry(tag_values)
-                .or_insert_with(|| StatValue::new(0, 1));
-
-            val.update(&trigger.change(defn).expect("Bad log definition"));
         }
     }
 
@@ -960,6 +964,27 @@ impl StatValue {
     fn as_float(&self) -> f64 {
         (self.num.load(Ordering::Relaxed) as f64) / (self.divisor as isize as f64)
     }
+}
+
+fn update_tagged_value(lock: &RwLock<HashMap<String, StatValue>>, change: &ChangeType, tag_values: String) {
+    // Use an inner block here to ensure the read lock drops out of scope.
+    {
+        let inner_vals = lock.read().expect("Poisoned lock");
+        if let Some(val) = inner_vals.get(&tag_values) {
+            val.update(change);
+            return;
+        }
+    }
+
+    // We didn't find a grouped value.  Get the write lock on the map so we can add it.
+    let mut inner_vals = lock.write().expect("Poisoned lock");
+    // It's possible that while we were waiting for the write lock another thread got
+    // in and created the stat entry, so check again.
+    let val = inner_vals
+        .entry(tag_values)
+        .or_insert_with(|| StatValue::new(0, 1));
+
+    val.update(change);
 }
 
 #[cfg(test)]
