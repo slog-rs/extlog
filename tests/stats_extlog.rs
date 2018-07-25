@@ -10,8 +10,8 @@ extern crate slog_extlog;
 #[macro_use]
 extern crate slog_extlog_derive;
 
-use slog_extlog::stats::*;
 use slog_extlog::slog_test::*;
+use slog_extlog::stats::*;
 use std::{panic, thread, time};
 
 const CRATE_LOG_NAME: &str = "SLOG_STATS_TRACKER_TEST";
@@ -35,10 +35,15 @@ define_stats! {
 #[LogDetails(Id = "1", Text = "Amount sent", Level = "Info")]
 #[StatTrigger(StatName = "test_counter", Action = "Incr", Value = "1")]
 #[StatTrigger(StatName = "test_second_counter", Action = "Incr", Value = "1")]
-#[StatTrigger(StatName = "test_gauge", Condition = "self.bytes < 200", Action = "Incr",
-              Value = "1")]
-#[StatTrigger(StatName = "test_second_gauge", Condition = "self.bytes > self.unbytes as u32",
-              Action = "Incr", ValueFrom = "self.bytes - (self.unbytes as u32)")]
+#[StatTrigger(
+    StatName = "test_gauge", Condition = "self.bytes < 200", Action = "Incr", Value = "1"
+)]
+#[StatTrigger(
+    StatName = "test_second_gauge",
+    Condition = "self.bytes > self.unbytes as u32",
+    Action = "Incr",
+    ValueFrom = "self.bytes - (self.unbytes as u32)"
+)]
 //LCOV_EXCL_START
 struct ExternalLog {
     bytes: u32,
@@ -47,16 +52,18 @@ struct ExternalLog {
 
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "2", Text = "Some floating point number", Level = "Error")]
-#[StatTrigger(StatName = "test_gauge", Condition = "self.floating > 1.0", Action = "Decr",
-              Value = "1")]
+#[StatTrigger(
+    StatName = "test_gauge", Condition = "self.floating > 1.0", Action = "Decr", Value = "1"
+)]
 struct SecondExternalLog {
     floating: f32,
 }
 
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "3", Text = "A string of text", Level = "Warning")]
-#[StatTrigger(StatName = "test_foo_count", Condition = "self.name == \"foo\"", Action = "Incr",
-              Value = "1")]
+#[StatTrigger(
+    StatName = "test_foo_count", Condition = "self.name == \"foo\"", Action = "Incr", Value = "1"
+)]
 #[StatTrigger(StatName = "test_grouped_counter", Action = "Incr", Value = "1")]
 struct ThirdExternalLog {
     #[StatGroup(StatName = "test_grouped_counter")]
@@ -66,8 +73,12 @@ struct ThirdExternalLog {
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "4", Text = "Some more irrelevant text", Level = "Info")]
 #[StatTrigger(StatName = "test_double_grouped", Action = "Incr", Value = "1")]
-#[StatTrigger(StatName = "test_latest_foo_error_count", Condition = "self.error != 0",
-              Action = "SetVal", ValueFrom = "self.foo_count")]
+#[StatTrigger(
+    StatName = "test_latest_foo_error_count",
+    Condition = "self.error != 0",
+    Action = "SetVal",
+    ValueFrom = "self.foo_count"
+)]
 struct FourthExternalLog {
     #[StatGroup(StatName = "test_double_grouped")]
     name: String,

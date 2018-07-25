@@ -59,10 +59,10 @@ pub extern crate slog_json;
 pub use super::stats::*;
 
 use super::slog;
-use std::sync::Mutex;
 use std::io;
 #[allow(unused_imports)] // we need this trait for lines()
 use std::io::BufRead;
+use std::sync::Mutex;
 
 /// Create a new test logger suitable for use with `read_json_values`.
 pub fn new_test_logger<T: io::Write + Send + 'static>(stream: T) -> slog::Logger {

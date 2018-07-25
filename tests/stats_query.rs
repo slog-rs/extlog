@@ -82,19 +82,15 @@ fn request_for_single_counter() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![
-            ExpectedStatSnapshot {
-                name: "test_counter",
-                description: "Test counter",
-                stat_type: Counter,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec![],
-                        value: 0f64,
-                    },
-                ],
-            },
-        ],
+        &vec![ExpectedStatSnapshot {
+            name: "test_counter",
+            description: "Test counter",
+            stat_type: Counter,
+            values: vec![ExpectedStatSnapshotValue {
+                group_values: vec![],
+                value: 0f64,
+            }],
+        }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
@@ -106,19 +102,15 @@ fn request_for_single_gauge() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![
-            ExpectedStatSnapshot {
-                name: "test_gauge",
-                description: "Test gauge",
-                stat_type: Gauge,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec![],
-                        value: 0f64,
-                    },
-                ],
-            },
-        ],
+        &vec![ExpectedStatSnapshot {
+            name: "test_gauge",
+            description: "Test gauge",
+            stat_type: Gauge,
+            values: vec![ExpectedStatSnapshotValue {
+                group_values: vec![],
+                value: 0f64,
+            }],
+        }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
@@ -135,23 +127,19 @@ fn request_for_multiple_metrics() {
                 name: "test_counter",
                 description: "Test counter",
                 stat_type: Counter,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec![],
-                        value: 0f64,
-                    },
-                ],
+                values: vec![ExpectedStatSnapshotValue {
+                    group_values: vec![],
+                    value: 0f64,
+                }],
             },
             ExpectedStatSnapshot {
                 name: "test_gauge",
                 description: "Test gauge",
                 stat_type: Gauge,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec![],
-                        value: 0f64,
-                    },
-                ],
+                values: vec![ExpectedStatSnapshotValue {
+                    group_values: vec![],
+                    value: 0f64,
+                }],
             },
         ], // LCOV_EXCL_LINE Kcov bug?
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -174,23 +162,19 @@ fn request_for_updated_metrics() {
                 name: "test_counter",
                 description: "Test counter",
                 stat_type: Counter,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec![],
-                        value: 1f64,
-                    },
-                ],
+                values: vec![ExpectedStatSnapshotValue {
+                    group_values: vec![],
+                    value: 1f64,
+                }],
             },
             ExpectedStatSnapshot {
                 name: "test_gauge",
                 description: "Test gauge",
                 stat_type: Gauge,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec![],
-                        value: 2f64,
-                    },
-                ],
+                values: vec![ExpectedStatSnapshotValue {
+                    group_values: vec![],
+                    value: 2f64,
+                }],
             },
         ], // LCOV_EXCL_LINE Kcov bug?
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -204,14 +188,12 @@ fn request_for_single_counter_with_groups_but_no_values() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![
-            ExpectedStatSnapshot {
-                name: "test_grouped_counter",
-                description: "Test grouped counter",
-                stat_type: Counter,
-                values: vec![],
-            },
-        ],
+        &vec![ExpectedStatSnapshot {
+            name: "test_grouped_counter",
+            description: "Test grouped counter",
+            stat_type: Counter,
+            values: vec![],
+        }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
@@ -223,14 +205,12 @@ fn request_for_single_gauge_with_groups_but_no_values() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![
-            ExpectedStatSnapshot {
-                name: "test_grouped_gauge",
-                description: "Test grouped gauge",
-                stat_type: Gauge,
-                values: vec![],
-            },
-        ],
+        &vec![ExpectedStatSnapshot {
+            name: "test_grouped_gauge",
+            description: "Test grouped gauge",
+            stat_type: Gauge,
+            values: vec![],
+        }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
@@ -251,19 +231,15 @@ fn request_for_single_counter_with_groups_and_one_value() {
     let stats = logger.get_stats();
     check_expected_stat_snaphots(
         &stats,
-        &vec![
-            ExpectedStatSnapshot {
-                name: "test_grouped_counter",
-                description: "Test grouped counter",
-                stat_type: Counter,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec!["value one".to_string(), "100".to_string()],
-                        value: 1f64,
-                    },
-                ], // LCOV_EXCL_LINE Kcov bug?
-            },
-        ],
+        &vec![ExpectedStatSnapshot {
+            name: "test_grouped_counter",
+            description: "Test grouped counter",
+            stat_type: Counter,
+            values: vec![ExpectedStatSnapshotValue {
+                group_values: vec!["value one".to_string(), "100".to_string()],
+                value: 1f64,
+            }], // LCOV_EXCL_LINE Kcov bug?
+        }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
@@ -284,19 +260,15 @@ fn request_for_single_gauge_with_groups_and_one_value() {
     let stats = logger.get_stats();
     check_expected_stat_snaphots(
         &stats,
-        &vec![
-            ExpectedStatSnapshot {
-                name: "test_grouped_gauge",
-                description: "Test grouped gauge",
-                stat_type: Gauge,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec!["value two".to_string(), "200".to_string()],
-                        value: 2f64,
-                    },
-                ],
-            },
-        ],
+        &vec![ExpectedStatSnapshot {
+            name: "test_grouped_gauge",
+            description: "Test grouped gauge",
+            stat_type: Gauge,
+            values: vec![ExpectedStatSnapshotValue {
+                group_values: vec!["value two".to_string(), "200".to_string()],
+                value: 2f64,
+            }],
+        }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
@@ -326,23 +298,21 @@ fn request_for_single_counter_with_groups_and_two_values() {
     let stats = logger.get_stats();
     check_expected_stat_snaphots(
         &stats,
-        &vec![
-            ExpectedStatSnapshot {
-                name: "test_grouped_counter",
-                description: "Test grouped counter",
-                stat_type: Counter,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec!["value one".to_string(), "100".to_string()],
-                        value: 1f64,
-                    },
-                    ExpectedStatSnapshotValue {
-                        group_values: vec!["value two".to_string(), "200".to_string()],
-                        value: 2f64,
-                    },
-                ], // LCOV_EXCL_LINE Kcov bug?
-            },
-        ],
+        &vec![ExpectedStatSnapshot {
+            name: "test_grouped_counter",
+            description: "Test grouped counter",
+            stat_type: Counter,
+            values: vec![
+                ExpectedStatSnapshotValue {
+                    group_values: vec!["value one".to_string(), "100".to_string()],
+                    value: 1f64,
+                },
+                ExpectedStatSnapshotValue {
+                    group_values: vec!["value two".to_string(), "200".to_string()],
+                    value: 2f64,
+                },
+            ], // LCOV_EXCL_LINE Kcov bug?
+        }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
@@ -395,23 +365,19 @@ fn request_for_many_metrics() {
                 name: "test_counter",
                 description: "Test counter",
                 stat_type: Counter,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec![],
-                        value: 1f64,
-                    },
-                ],
+                values: vec![ExpectedStatSnapshotValue {
+                    group_values: vec![],
+                    value: 1f64,
+                }],
             },
             ExpectedStatSnapshot {
                 name: "test_gauge",
                 description: "Test gauge",
                 stat_type: Gauge,
-                values: vec![
-                    ExpectedStatSnapshotValue {
-                        group_values: vec![],
-                        value: 2f64,
-                    },
-                ],
+                values: vec![ExpectedStatSnapshotValue {
+                    group_values: vec![],
+                    value: 2f64,
+                }],
             },
             ExpectedStatSnapshot {
                 name: "test_grouped_counter",

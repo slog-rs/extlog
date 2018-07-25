@@ -67,7 +67,7 @@ pub trait StatDefinition: fmt::Debug {
     /// An optional list of field names to group the statistic by.
     fn group_by(&self) -> Vec<&'static str>;
 
-    fn buckets(&self) -> &'static Buckets;
+    fn buckets(&self) -> Buckets;
 }
 
 /// A macro to define the statistics that can be tracked by the logger.
@@ -163,15 +163,16 @@ macro_rules! define_stats {
                pub struct $stat;
             )*
         }
+
         $(define_stats!{@single $stat, $stype, $desc, $bmethod, [$($tags),*], [$($blimits:tt),*]})*
     };
 
       // Trait impl for StatDefinition
     (@single $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:tt),*]) => {
+
         // Suppress the warning about cases - this value is never going to be seen
         #[allow(non_upper_case_globals)]
         static $stat : inner_stats::$stat = inner_stats::$stat;
-            // static BUCKETS : $crate::stats::Bucket = $crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod, vec![$($blimits),*]);
 
         impl $crate::stats::StatDefinition for inner_stats::$stat {
             /// The name of this statistic.
@@ -183,9 +184,10 @@ macro_rules! define_stats {
             /// An optional list of field names to group the statistic by.
             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
 
-            fn buckets(&self) -> &'static Buckets {
-                // &$stat::BUCKETS
-                panic!();
+            fn buckets(&self) -> Buckets {
+                $crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
+                    vec![$($blimits),* ],
+                )
             }
         }
     };
@@ -256,8 +258,8 @@ impl BucketLimit {
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Buckets {
-    method: BucketMethod,
-    limits: Vec<BucketLimit>,
+    pub method: BucketMethod,
+    pub limits: Vec<BucketLimit>,
 }
 
 impl Buckets {
