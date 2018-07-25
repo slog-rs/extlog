@@ -67,7 +67,7 @@ pub trait StatDefinition: fmt::Debug {
     /// An optional list of field names to group the statistic by.
     fn group_by(&self) -> Vec<&'static str>;
 
-    fn buckets(&self) -> Buckets;
+    fn buckets(&self) -> Option<Buckets>;
 }
 
 /// A macro to define the statistics that can be tracked by the logger.
@@ -184,10 +184,15 @@ macro_rules! define_stats {
             /// An optional list of field names to group the statistic by.
             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
 
-            fn buckets(&self) -> Buckets {
-                $crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
-                    vec![$($blimits),* ],
-                )
+            fn buckets(&self) -> Option<Buckets> {
+                match self.stype() {
+                    $crate::stats::StatType::BucketCounter => {
+                        Some($crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
+                            vec![$($blimits),* ],
+                        ))
+                    },
+                    _ => None
+                }
             }
         }
     };
@@ -361,20 +366,29 @@ where
     /// Add a new statistic to this tracker.
     pub fn add_statistic(&mut self, defn: &'static (StatDefinition + Sync + RefUnwindSafe)) {
 
-        let buckets_len = defn.buckets().len();
-        let mut bucket_values = Vec::new();
-        let mut bucket_group_values = Vec::new();
-        bucket_values.reserve_exact(buckets_len);
-        bucket_group_values.reserve_exact(buckets_len);
-        for _ in 1..buckets_len {
-            bucket_values.push(StatValue::new(0, 1));
-            bucket_group_values.push(HashMap::new());
-        }
+        let (is_bucketed,
+             bucket_values,
+             bucket_group_values
+        ) = if let Some(buckets) = defn.buckets(){
+            let buckets_len = buckets.len();
+            let mut bucket_values = Vec::new();
+            let mut bucket_group_values = Vec::new();
+            bucket_values.reserve_exact(buckets_len);
+            bucket_group_values.reserve_exact(buckets_len);
+            for _ in 1..buckets_len {
+                bucket_values.push(StatValue::new(0, 1));
+                bucket_group_values.push(HashMap::new());
+            }
+            (true, bucket_values, bucket_group_values)
+        } else {
+            (false, Vec::new(), Vec::new())
+        };
 
         let stat = Stat {
             defn,
             is_grouped: !defn.group_by().is_empty(),
             group_values: RwLock::new(HashMap::new()),
+            is_bucketed,
             bucket_values: RwLock::new(bucket_values),
             bucket_group_values: RwLock::new(bucket_group_values),
             value: StatValue::new(0, 1),
@@ -816,6 +830,8 @@ struct Stat {
     // The fields the stat is grouped by.  If empty, then there is no grouping.
     group_values: RwLock<HashMap<String, StatValue>>,
 
+    is_bucketed: bool,
+
     bucket_values: RwLock<Vec<StatValue>>,
 
     bucket_group_values: RwLock<Vec<HashMap<String, StatValue>>>,
@@ -842,6 +858,12 @@ impl Stat {
             .map(|(k, v)| (k.clone(), v.as_float()))
             .collect()
     }
+
+    // fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
+    //     self.value.update(&log.change(*defn).expect("Bad log definition"));
+
+
+    // }
 
     // Check if the stat is grouped, and if so, get and update the correct
     // grouped values.
