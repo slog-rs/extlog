@@ -262,6 +262,7 @@ impl Buckets {
         Buckets { method, limits }
     }
 
+    // return a vector containing the indices of the buckets that should be updated
     pub fn sort_value(&self, value: f64) -> Vec<usize> {
         match self.method {
             BucketMethod::CumulFreq => self.limits
@@ -285,6 +286,10 @@ impl Buckets {
                 vec![min_limit_index]
             }
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.limits.len()
     }
 }
 
@@ -355,10 +360,23 @@ where
 
     /// Add a new statistic to this tracker.
     pub fn add_statistic(&mut self, defn: &'static (StatDefinition + Sync + RefUnwindSafe)) {
+
+        let buckets_len = defn.buckets().len();
+        let mut bucket_values = Vec::new();
+        let mut bucket_group_values = Vec::new();
+        bucket_values.reserve_exact(buckets_len);
+        bucket_group_values.reserve_exact(buckets_len);
+        for _ in 1..buckets_len {
+            bucket_values.push(StatValue::new(0, 1));
+            bucket_group_values.push(HashMap::new());
+        }
+
         let stat = Stat {
             defn,
             is_grouped: !defn.group_by().is_empty(),
             group_values: RwLock::new(HashMap::new()),
+            bucket_values: RwLock::new(bucket_values),
+            bucket_group_values: RwLock::new(bucket_group_values),
             value: StatValue::new(0, 1),
         }; // LCOV_EXCL_LINE Kcov bug?
 
@@ -797,6 +815,10 @@ struct Stat {
     is_grouped: bool,
     // The fields the stat is grouped by.  If empty, then there is no grouping.
     group_values: RwLock<HashMap<String, StatValue>>,
+
+    bucket_values: RwLock<Vec<StatValue>>,
+
+    bucket_group_values: RwLock<Vec<HashMap<String, StatValue>>>,
 }
 // LCOV_EXCL_STOP
 
