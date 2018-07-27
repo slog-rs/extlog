@@ -991,7 +991,8 @@ impl Stat {
     }
 
     fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
-        self.value.update(&trigger.change(defn).expect("Bad log definition"));
+        let change = trigger.change(defn).expect("Bad log definition");
+        self.value.update(&change);
 
         if self.is_grouped {
             let tag_values = self.defn
@@ -1001,7 +1002,22 @@ impl Stat {
                 .collect::<Vec<String>>()
                 .join(","); // LCOV_EXCL_LINE Kcov bug?
 
-            update_tagged_value(&self.group_values, &trigger.change(defn).expect("Bad log definition"), tag_values);
+            update_or_create_tagged_value(&self.group_values, Some(&change), tag_values.clone());
+
+            if let Some(ref buckets) = self.buckets {
+                let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
+                let buckets_to_update = buckets.assign_buckets(bucket_value);
+
+                // first ensure all the bucketed values for this tag combination exist.
+                for lock in self.bucket_group_values.iter() {
+                    update_or_create_tagged_value(lock, None, tag_values.clone());
+                }
+
+                for index in buckets_to_update.iter() {
+                    let lock = &self.bucket_group_values.get(*index).expect("Invalid bucket index");
+                    update_or_create_tagged_value(lock, Some(&change), tag_values.clone());
+                }
+            }
         }
 
         if let Some(ref buckets) = self.buckets {
@@ -1009,27 +1025,10 @@ impl Stat {
             let buckets_to_update = buckets.assign_buckets(bucket_value);
 
             for index in buckets_to_update.iter() {
-
-                // Use an inner block here to ensure the read lock drops out of scope.
-                {
-                    self.bucket_values
-                        .get(*index)
-                        .expect("Invalid bucket index")
-                        .update(&trigger.change(defn).expect("Bad log definition"));
-                }
-
-                if self.is_grouped {
-                    let tag_values = self.defn
-                        .group_by()
-                        .iter()
-                        .map(|n| trigger.tag_value(defn, n))
-                        .collect::<Vec<String>>()
-                        .join(","); // LCOV_EXCL_LINE Kcov bug?
-
-                    let lock = &self.bucket_group_values.get(*index).expect("Invalid bucket index");
-
-                    update_tagged_value(lock, &trigger.change(defn).expect("Bad log definition"), tag_values);
-                }
+                self.bucket_values
+                    .get(*index)
+                    .expect("Invalid bucket index")
+                    .update(&change);
             }
         }
     }
@@ -1096,9 +1095,9 @@ impl StatValue {
     }
 }
 
-fn update_tagged_value(lock: &RwLock<HashMap<String, StatValue>>, change: &ChangeType, tag_values: String) {
+fn update_or_create_tagged_value(lock: &RwLock<HashMap<String, StatValue>>, change: Option<&ChangeType>, tag_values: String) {
     // Use an inner block here to ensure the read lock drops out of scope.
-    {
+    if let Some(change) = change {
         let inner_vals = lock.read().expect("Poisoned lock");
         if let Some(val) = inner_vals.get(&tag_values) {
             val.update(change);
@@ -1114,7 +1113,9 @@ fn update_tagged_value(lock: &RwLock<HashMap<String, StatValue>>, change: &Chang
         .entry(tag_values)
         .or_insert_with(|| StatValue::new(0, 1));
 
-    val.update(change);
+    if let Some(change) = change {
+        val.update(change);
+    }
 }
 
 #[cfg(test)]
