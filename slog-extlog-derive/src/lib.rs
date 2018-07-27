@@ -391,9 +391,9 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         let id = &t.id.to_string();
         let bucket = t.bucket_by.clone();
         if let Some(bucket) = bucket {
-            let bucket_str = bucket.to_string();
+            // let bucket_str = bucket.to_string();
             stats_buckets = quote! { #stats_buckets
-                #id => Some(self.#bucket_str),
+                #id => Some(self.#bucket as f64),
             }
         } else {
             stats_buckets = quote! { #stats_buckets
