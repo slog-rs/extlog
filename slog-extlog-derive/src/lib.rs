@@ -113,6 +113,7 @@
 //!
 //! use slog_extlog::{ExtLoggable, stats};
 //! use slog_extlog::stats::StatDefinition;
+//! use slog_extlog::stats::Buckets;
 //!
 //! // The prefix to add to all log identifiers.
 //! const CRATE_LOG_NAME: &'static str = "FOO";
@@ -209,7 +210,6 @@ struct StatTriggerData {
     val: StatTriggerValue,
     group_by: Vec<syn::Ident>,
     bucket_by: Option<syn::Ident>,
-    // bucket_data: Option<BucketData>,
 }
 
 /// Generate implementations of the `slog::Value` trait.
@@ -401,22 +401,6 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
             }
         }
     }
-
-    // let mut buckets = quote!{};
-    // for t in &triggers {
-    //     let id = &t.id.to_string();
-    //     let bucket_data = t.bucket_data.clone();
-    //     let bucket_field_str = bucket_data.bucket_field_id.to_string();
-    //     buckets = quote! { #buckets
-    //         #id => {
-    //             if let Some(bucket_data) = bucket_data {
-
-    //             } else {
-    //                 None
-    //             }
-    //         },
-    //     }
-    // }
 
     // Tweak to ensure we avoid unused variable warnings in `get_tag_value()`.
     let tag_name_ident = if !triggers.is_empty() {

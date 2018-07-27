@@ -219,6 +219,7 @@ pub struct ExpectedStatSnapshot {
 pub struct ExpectedStatSnapshotValue {
     pub group_values: Vec<String>,
     pub value: f64,
+    pub bucket_index: Option<usize>,
 }
 // LCOV_EXCL_STOP
 
@@ -227,9 +228,6 @@ pub fn check_expected_stat_snaphots(
     stats: &[StatSnapshot],
     expected_stats: &[ExpectedStatSnapshot],
 ) {
-
-    println!("Expected: {:?}", expected_stats);
-    println!("Found: {:?}", stats);
     for stat in expected_stats {
         let found_stat = stats.iter().find(|s| s.definition.name() == stat.name);
 
@@ -240,19 +238,20 @@ pub fn check_expected_stat_snaphots(
         assert_eq!(found_stat.definition.description(), stat.description);
 
         for value in stat.values.iter() {
-            let found_value = found_stat
-                .values
-                .iter()
-                .find(|val| val.group_values == value.group_values);
+            let found_value = found_stat.values.iter().find(|val| {
+                val.group_values == value.group_values && val.bucket_index == value.bucket_index
+            });
             assert!(
                 found_value.is_some(),
-                "Failed to find value with groups {:?} for stat {}",
+                "Failed to find value with groups {:?} and bucket_inxex {:?} for stat {}",
                 value.group_values, // LCOV_EXCL_LINE
-                stat.name           // LCOV_EXCL_LINE
+                value.bucket_index,
+                stat.name // LCOV_EXCL_LINE
             );
             let found_value = found_value.unwrap();
             assert_eq!(found_value.group_values, found_value.group_values);
             assert_eq!(found_value.value, value.value);
+            assert_eq!(found_value.bucket_index, value.bucket_index);
         }
 
         assert_eq!(found_stat.values.len(), stat.values.len());

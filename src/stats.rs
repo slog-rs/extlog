@@ -192,6 +192,10 @@ macro_rules! define_stats {
         define_stats!{@inner $stat, $stype, $desc, Freq, [$($tags),*], []}
     };
 
+    (@single $stat:ident, $stype:ident, $id:expr, $desc:expr, [$($tags:tt),*] ) => {
+        define_stats!{@inner $stat, $stype, $desc, Freq, [$($tags),*], []}
+    };
+
       // Trait impl for StatDefinition
     (@inner $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:expr),*]) => {
 
@@ -220,10 +224,6 @@ macro_rules! define_stats {
                 }
             }
         }
-    };
-
-    ($name:ident = {$($stat:ident($stype:ident, $id:expr, $desc:expr, [$($tags:tt),*])),*}) => {
-        define_stats! { $name = {$($stat($stype, $desc, [$($tags),*])),*} }
     };
 }
 
@@ -474,21 +474,17 @@ where
     pub fn add_statistic(&mut self, defn: &'static (StatDefinition + Sync + RefUnwindSafe)) {
 
         let (buckets,
-             bucket_values,
-             bucket_group_values
+             bucket_values
         ) = if let Some(buckets) = defn.buckets(){
             let buckets_len = buckets.len();
             let mut bucket_values = Vec::new();
-            let mut bucket_group_values = Vec::new();
             bucket_values.reserve_exact(buckets_len);
-            bucket_group_values.reserve_exact(buckets_len);
             for _ in 0..buckets_len {
                 bucket_values.push(StatValue::new(0, 1));
-                bucket_group_values.push(RwLock::new(HashMap::new()));
             }
-            (Some(buckets), bucket_values, bucket_group_values)
+            (Some(buckets), bucket_values)
         } else {
-            (None, Vec::new(), Vec::new())
+            (None, Vec::new())
         };
 
         let stat = Stat {
@@ -497,7 +493,7 @@ where
             group_values: RwLock::new(HashMap::new()),
             buckets,
             bucket_values: bucket_values,
-            bucket_group_values: bucket_group_values,
+            bucket_group_values: RwLock::new(HashMap::new()),
             value: StatValue::new(0, 1),
         }; // LCOV_EXCL_LINE Kcov bug?
 
@@ -938,7 +934,7 @@ struct Stat {
 
     bucket_values: Vec<StatValue>,
 
-    bucket_group_values: Vec<RwLock<HashMap<String, StatValue>>>,
+    bucket_group_values: RwLock<HashMap<String,Vec<StatValue>>>,
 }
 // LCOV_EXCL_STOP
 
@@ -958,14 +954,9 @@ impl Stat {
         let values = if let Some(_) = self.buckets {
             if self.is_grouped {
                 let mut bucket_group_vals = Vec::new();
-                for (index, lock) in self.bucket_group_values.iter().enumerate() {
-                    let inner_vals = lock.read().expect("Poisoned lock)");
-                    bucket_group_vals.extend(
-                        inner_vals
-                            .iter()
-                            .map(|(group_values_str, value)| {
-                                (Some(group_values_str.to_string()), Some(index), value.as_float())
-                            }));
+                let inner_vals = self.bucket_group_values.read().expect("Poisoned lock)");
+                for (group_values_str, bucket_vals) in inner_vals.iter() {
+                    bucket_group_vals.extend(bucket_vals.iter().enumerate().map(|(i, val)| (Some(group_values_str.to_string()), Some(i), val.as_float())));
                 }
                 bucket_group_vals
             } else {
@@ -1002,20 +993,55 @@ impl Stat {
                 .collect::<Vec<String>>()
                 .join(","); // LCOV_EXCL_LINE Kcov bug?
 
-            update_or_create_tagged_value(&self.group_values, Some(&change), tag_values.clone());
+            let found_values = {
+                let inner_vals = self.group_values.read().expect("Poisoned lock");
+                if let Some(val) = inner_vals.get(&tag_values) {
+                    val.update(&change);
+                    true
+                } else {false}
+            };
+
+            if !found_values {
+                // We didn't find a grouped value.  Get the write lock on the map so we can add it.
+                let mut inner_vals = self.group_values.write().expect("Poisoned lock");
+                // It's possible that while we were waiting for the write lock another thread got
+                // in and created the stat entry, so check again.
+                let val = inner_vals
+                    .entry(tag_values.to_string())
+                    .or_insert_with(|| StatValue::new(0, 1));
+
+                val.update(&change);
+            }
 
             if let Some(ref buckets) = self.buckets {
                 let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
                 let buckets_to_update = buckets.assign_buckets(bucket_value);
 
-                // first ensure all the bucketed values for this tag combination exist.
-                for lock in self.bucket_group_values.iter() {
-                    update_or_create_tagged_value(lock, None, tag_values.clone());
-                }
+                let found_values = {
+                    let inner_vals = self.bucket_group_values.read().expect("Poisoned lock");
+                    if let Some(tagged_bucket_vals) = inner_vals.get(&tag_values) {
+                        update_bucket_values(tagged_bucket_vals, &buckets_to_update, &change);
+                        true
+                    } else {false}
+                };
 
-                for index in buckets_to_update.iter() {
-                    let lock = &self.bucket_group_values.get(*index).expect("Invalid bucket index");
-                    update_or_create_tagged_value(lock, Some(&change), tag_values.clone());
+                if !found_values {
+                    // we didn't find bucketed values for this tag combination. Create them now.
+                    let mut new_bucket_vals = Vec::new();
+                    let bucket_len = buckets.len();
+                    new_bucket_vals.reserve_exact(bucket_len);
+                    for _ in 0..bucket_len {
+                        new_bucket_vals.push(StatValue::new(0, 1));
+                    }
+
+                    let mut inner_vals = self.bucket_group_values.write().expect("Poisoned lock");
+                    // It's possible that while we were waiting for the write lock another thread got
+                    // in and created the bucketed entries, so check again.
+                    let vals = inner_vals
+                        .entry(tag_values)
+                        .or_insert_with(|| new_bucket_vals);
+
+                    update_bucket_values(vals, &buckets_to_update, &change);
                 }
             }
         }
@@ -1031,6 +1057,37 @@ impl Stat {
                     .update(&change);
             }
         }
+
+
+        // // old
+        // if let Some(ref buckets) = self.buckets {
+        //     let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
+        //     let buckets_to_update = buckets.assign_buckets(bucket_value);
+
+        //     for index in buckets_to_update.iter() {
+
+        //         // Use an inner block here to ensure the read lock drops out of scope.
+        //         {
+        //             self.bucket_values
+        //                 .get(*index)
+        //                 .expect("Invalid bucket index")
+        //                 .update(&trigger.change(defn).expect("Bad log definition"));
+        //         }
+
+        //         if self.is_grouped {
+        //             let tag_values = self.defn
+        //                 .group_by()
+        //                 .iter()
+        //                 .map(|n| trigger.tag_value(defn, n))
+        //                 .collect::<Vec<String>>()
+        //                 .join(","); // LCOV_EXCL_LINE Kcov bug?
+
+        //             let lock = &self.bucket_group_values.get(*index).expect("Invalid bucket index");
+
+        //             update_tagged_value(lock, &trigger.change(defn).expect("Bad log definition"), tag_values);
+        //         }
+        //     }
+        // }
     }
 
     /// Get the current values for this stat as a MetricFamily
@@ -1095,26 +1152,12 @@ impl StatValue {
     }
 }
 
-fn update_or_create_tagged_value(lock: &RwLock<HashMap<String, StatValue>>, change: Option<&ChangeType>, tag_values: String) {
-    // Use an inner block here to ensure the read lock drops out of scope.
-    if let Some(change) = change {
-        let inner_vals = lock.read().expect("Poisoned lock");
-        if let Some(val) = inner_vals.get(&tag_values) {
-            val.update(change);
-            return;
-        }
-    }
-
-    // We didn't find a grouped value.  Get the write lock on the map so we can add it.
-    let mut inner_vals = lock.write().expect("Poisoned lock");
-    // It's possible that while we were waiting for the write lock another thread got
-    // in and created the stat entry, so check again.
-    let val = inner_vals
-        .entry(tag_values)
-        .or_insert_with(|| StatValue::new(0, 1));
-
-    if let Some(change) = change {
-        val.update(change);
+fn update_bucket_values(bucket_values: &Vec<StatValue>, buckets_to_update: &Vec<usize>, change: &ChangeType) {
+    for index in buckets_to_update.iter() {
+        bucket_values
+            .get(*index)
+                .expect("Invalid bucket index")
+                .update(change);
     }
 }
 
