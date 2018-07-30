@@ -385,7 +385,6 @@ fn test_extloggable_bucket_counter_freq() {
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
     let logs = get_stat_logs("test_bucket_counter_freq", &mut data);
-    println!("logs: {:?}", logs);
     assert_eq!(logs.len(), 5);
 
     check_expected_stats(
@@ -592,50 +591,51 @@ fn test_extloggable_bucket_counter_cumul_freq_high_value() {
 }
 
 #[test]
-fn test_extloggable_buckets_and_tags() {
+fn test_extloggable_buckets_and_repeated_tags() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
-    xlog!(logger, FifthExternalLog { floating: 2.5 });
+    xlog!(
+        logger,
+        SixthExternalLog {
+            name: "name".to_string(),
+            error: 3,
+            floating: -1f32
+        }
+    );
+    xlog!(
+        logger,
+        SixthExternalLog {
+            name: "name".to_string(),
+            error: 3,
+            floating: 7f32
+        }
+    );
 
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
-    let logs = get_stat_logs("test_bucket_counter_freq", &mut data);
-    assert_eq!(logs.len(), 5);
+    let logs = get_stat_logs("test_bucket_counter_grouped", &mut data);
+    assert_eq!(logs.len(), 3);
 
     check_expected_stats(
         &logs,
         vec![
             ExpectedStat {
-                stat_name: "test_bucket_counter_freq",
-                tag: None,
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=name,error=3"),
                 value: 0f64,
                 metric_type: "bucket counter",
-                bucket: Some(BucketLimit::Num(1 as f64)),
+                bucket: Some(BucketLimit::Num(-5 as f64)),
             },
             ExpectedStat {
-                stat_name: "test_bucket_counter_freq",
-                tag: None,
-                value: 0f64,
-                metric_type: "bucket counter",
-                bucket: Some(BucketLimit::Num(2 as f64)),
-            },
-            ExpectedStat {
-                stat_name: "test_bucket_counter_freq",
-                tag: None,
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=name,error=3"),
                 value: 1f64,
                 metric_type: "bucket counter",
-                bucket: Some(BucketLimit::Num(3 as f64)),
+                bucket: Some(BucketLimit::Num(5 as f64)),
             },
             ExpectedStat {
-                stat_name: "test_bucket_counter_freq",
-                tag: None,
-                value: 0f64,
-                metric_type: "bucket counter",
-                bucket: Some(BucketLimit::Num(4 as f64)),
-            },
-            ExpectedStat {
-                stat_name: "test_bucket_counter_freq",
-                tag: None,
-                value: 0f64,
+                stat_name: "test_bucket_counter_grouped",
+                tag: Some("name=name,error=3"),
+                value: 1f64,
                 metric_type: "bucket counter",
                 bucket: Some(BucketLimit::Unbounded),
             },

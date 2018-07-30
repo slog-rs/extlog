@@ -687,7 +687,7 @@ impl<T: StatisticsLogFormatter> Clone for StatisticsLogger<T> {
         StatisticsLogger {
             logger: self.logger.clone(),
             tracker: self.tracker.clone(),
-        }
+        } // LCOV_EXCL_LINE Kcov bug
     }
 }
 

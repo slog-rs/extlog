@@ -245,8 +245,8 @@ pub fn check_expected_stat_snaphots(
                 found_value.is_some(),
                 "Failed to find value with groups {:?} and bucket_index {:?} for stat {}",
                 value.group_values, // LCOV_EXCL_LINE
-                value.bucket_index,
-                stat.name // LCOV_EXCL_LINE
+                value.bucket_index, // LCOV_EXCL_LINE
+                stat.name           // LCOV_EXCL_LINE
             );
             let found_value = found_value.unwrap();
             assert_eq!(found_value.group_values, found_value.group_values);

@@ -1,5 +1,4 @@
 //! Tests for querying the current values of stats.
-//!
 
 extern crate futures;
 
@@ -507,7 +506,7 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
             group1: "one".to_string(),
             group2: "two".to_string(),
             bucket_value: 7.4
-        }
+        } // LCOV_EXCL_LINE Kcov bug?
     );
     xlog!(
         logger,
@@ -516,7 +515,7 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
             group1: "three".to_string(),
             group2: "four".to_string(),
             bucket_value: -20f32
-        }
+        } // LCOV_EXCL_LINE Kcov bug?
     );
 
     let stats = logger.get_stats();
