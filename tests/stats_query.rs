@@ -406,7 +406,6 @@ fn request_for_bucket_counter_freq() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-
 #[test]
 fn request_for_bucket_counter_freq_one_value() {
     static STATS: StatDefinitions = &[&test_bucket_counter_freq];
@@ -524,7 +523,7 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
 
     assert_eq!(
         stats[0].definition.buckets(),
-        Some(Buckets::new(BucketMethod::CumulFreq, vec![-1.5f64, 0f64,]))
+        Some(Buckets::new(BucketMethod::CumulFreq, vec![-1.5f64, 0f64]))
     );
 
     check_expected_stat_snaphots(
@@ -535,32 +534,32 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
             stat_type: BucketCounter,
             values: vec![
                 ExpectedStatSnapshotValue {
-                    group_values: vec!["one".to_string(),"two".to_string()],
+                    group_values: vec!["one".to_string(), "two".to_string()],
                     bucket_index: Some(0),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
-                    group_values: vec!["one".to_string(),"two".to_string()],
+                    group_values: vec!["one".to_string(), "two".to_string()],
                     bucket_index: Some(1),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
-                    group_values: vec!["one".to_string(),"two".to_string()],
+                    group_values: vec!["one".to_string(), "two".to_string()],
                     bucket_index: Some(2),
                     value: 3f64,
                 },
                 ExpectedStatSnapshotValue {
-                    group_values: vec!["three".to_string(),"four".to_string()],
+                    group_values: vec!["three".to_string(), "four".to_string()],
                     bucket_index: Some(0),
                     value: 4f64,
                 },
                 ExpectedStatSnapshotValue {
-                    group_values: vec!["three".to_string(),"four".to_string()],
+                    group_values: vec!["three".to_string(), "four".to_string()],
                     bucket_index: Some(1),
                     value: 4f64,
                 },
                 ExpectedStatSnapshotValue {
-                    group_values: vec!["three".to_string(),"four".to_string()],
+                    group_values: vec!["three".to_string(), "four".to_string()],
                     bucket_index: Some(2),
                     value: 4f64,
                 },

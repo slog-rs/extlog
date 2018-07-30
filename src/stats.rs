@@ -1,6 +1,6 @@
 //! Statistics generator for [`slog`].
 //!
-//! This crate allows for statistics - counters gauges, and bucket counters - to be automatically
+//! This crate allows for statistics - counters, gauges, and bucket counters - to be automatically
 //! calculated and reported based on logged events.  The logged events MUST implement the
 //! [`ExtLoggable`] trait.
 //!
@@ -128,6 +128,7 @@ pub trait StatDefinition: fmt::Debug {
 #[macro_export]
 macro_rules! define_stats {
 
+    // Entry point - match each individual stat name and pass on the details for further parsing
     ($name:ident = {$($stat:ident($($details:tt),*)),*}) => {
         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
 
@@ -145,19 +146,22 @@ macro_rules! define_stats {
         )*
     };
 
+    // `BucketCounter`s require a `BucketMethod` and bucket limits
     (@single $stat:ident, BucketCounter, $desc:expr, [$($tags:tt),*], ($bmethod:ident, [$($blimits:expr),*]) ) => {
         define_stats!{@inner $stat, BucketCounter, $desc, $bmethod, [$($tags),*], [$($blimits),*]}
     };
 
+    // Non `BucketCounter` stat types
     (@single $stat:ident, $stype:ident, $desc:expr, [$($tags:tt),*] ) => {
         define_stats!{@inner $stat, $stype, $desc, Freq, [$($tags),*], []}
     };
 
+    // Retained for backwards-compatibility
     (@single $stat:ident, $stype:ident, $id:expr, $desc:expr, [$($tags:tt),*] ) => {
         define_stats!{@inner $stat, $stype, $desc, Freq, [$($tags),*], []}
     };
 
-      // Trait impl for StatDefinition
+    // Trait impl for StatDefinition
     (@inner $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:expr),*]) => {
 
         // Suppress the warning about cases - this value is never going to be seen
@@ -231,7 +235,7 @@ pub enum BucketLimit {
 }
 
 impl BucketLimit {
-    /// Returns whether a given BucketLimit is less than or equal to self
+    /// Returns whether another `BucketLimit` is less than or equal to self
     pub fn le<'a>(&self, other: &BucketLimit) -> bool {
         match (self, other) {
             (BucketLimit::Num(f1), BucketLimit::Num(f2)) => f1 <= f2,
@@ -286,7 +290,7 @@ impl Buckets {
                     .map(|(i, _)| i)
                     .collect();
                 buckets
-            },
+            }
             BucketMethod::Freq => {
                 let mut min_limit_index = self.limits.len() - 1;
                 for (i, limit) in self.limits.iter().enumerate() {
@@ -377,12 +381,9 @@ where
 
     /// Add a new statistic to this tracker.
     pub fn add_statistic(&mut self, defn: &'static (StatDefinition + Sync + RefUnwindSafe)) {
-
         // if the definition specifies a set of buckets, add `StatValue`s to represent the
         // bucketed values.
-        let (buckets,
-             bucket_values
-        ) = if let Some(buckets) = defn.buckets(){
+        let (buckets, bucket_values) = if let Some(buckets) = defn.buckets() {
             let buckets_len = buckets.len();
             let mut bucket_values = Vec::new();
             bucket_values.reserve_exact(buckets_len);
@@ -431,14 +432,14 @@ where
     /// This function is usually just called on a timer by the logger directly.
     pub fn log_all(&self, logger: &StatisticsLogger<T>) {
         for stat in self.stats.values() {
-
-            // Log all the grouped values.
+            // Log all the grouped and bucketed values.
             let outputs = stat.get_bucket_group_name_vals();
 
-            // The `outputs` is a vector of tuples containing the (tag value, stat value).
+            // The `outputs` is a vector of tuples containing the (tag value, bucket_index, stat value).
             for (name, bucket_index, val) in outputs {
-
-                let bucket = bucket_index.and_then(|i| stat.buckets.as_ref().and_then(|buckets| buckets.get(i)));
+                // Get the upper bound of the bucket at the given index if present.
+                let bucket = bucket_index
+                    .and_then(|i| stat.buckets.as_ref().and_then(|buckets| buckets.get(i)));
 
                 // The tags require a vector of (tag name, tag value) types, so get these.
                 let tags = if let Some(ref name) = name {
@@ -458,7 +459,6 @@ where
                     },
                 ); // LCOV_EXCL_LINE Kcov bug?
             }
-
         }
     }
 
@@ -842,7 +842,7 @@ struct Stat {
     bucket_values: Vec<StatValue>,
     // The stat values grouped by bucket and fields. Non-empty only if the stat is
     // both bucketed and grouped.
-    bucket_group_values: RwLock<HashMap<String,Vec<StatValue>>>,
+    bucket_group_values: RwLock<HashMap<String, Vec<StatValue>>>,
 }
 // LCOV_EXCL_STOP
 
@@ -864,13 +864,17 @@ impl Stat {
                 let mut bucket_group_vals = Vec::new();
                 let inner_vals = self.bucket_group_values.read().expect("Poisoned lock)");
                 for (group_values_str, bucket_vals) in inner_vals.iter() {
-                    bucket_group_vals.extend(bucket_vals.iter().enumerate().map(|(i, val)| (Some(group_values_str.to_string()), Some(i), val.as_float())));
+                    bucket_group_vals.extend(bucket_vals.iter().enumerate().map(|(i, val)| {
+                        (Some(group_values_str.to_string()), Some(i), val.as_float())
+                    }));
                 }
                 bucket_group_vals
             } else {
-                self.bucket_values.iter().enumerate().map(|(index, value)| {
-                    (None, Some(index), value.as_float())
-                }).collect()
+                self.bucket_values
+                    .iter()
+                    .enumerate()
+                    .map(|(index, value)| (None, Some(index), value.as_float()))
+                    .collect()
             }
         } else {
             if self.is_grouped {
@@ -909,7 +913,9 @@ impl Stat {
                 if let Some(val) = inner_vals.get(&tag_values) {
                     val.update(&change);
                     true
-                } else {false}
+                } else {
+                    false
+                }
             };
 
             if !found_values {
@@ -934,7 +940,9 @@ impl Stat {
                     if let Some(tagged_bucket_vals) = inner_vals.get(&tag_values) {
                         update_bucket_values(tagged_bucket_vals, &buckets_to_update, &change);
                         true
-                    } else {false}
+                    } else {
+                        false
+                    }
                 };
 
                 if !found_values {
@@ -974,7 +982,6 @@ impl Stat {
 
     /// Get the current values for this stat as a MetricFamily
     fn get_snapshot(&self) -> StatSnapshot {
-
         let values = self.get_bucket_group_name_vals()
             .iter()
             .map(|(group_values_str, bucket_index, value)| {
@@ -983,9 +990,12 @@ impl Stat {
                         .split(",")
                         .map(|group| group.to_string())
                         .collect::<Vec<_>>()
-                } else {vec![]};
+                } else {
+                    vec![]
+                };
                 (StatSnapshotValue::new(group_values, *bucket_index, *value))
-            }).collect();
+            })
+            .collect();
 
         StatSnapshot::new(self.defn, values)
     }
@@ -1034,12 +1044,16 @@ impl StatValue {
     }
 }
 
-fn update_bucket_values(bucket_values: &Vec<StatValue>, buckets_to_update: &Vec<usize>, change: &ChangeType) {
+fn update_bucket_values(
+    bucket_values: &Vec<StatValue>,
+    buckets_to_update: &Vec<usize>,
+    change: &ChangeType,
+) {
     for index in buckets_to_update.iter() {
         bucket_values
             .get(*index)
-                .expect("Invalid bucket index")
-                .update(change);
+            .expect("Invalid bucket index")
+            .update(change);
     }
 }
 
