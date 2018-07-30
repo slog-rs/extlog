@@ -263,7 +263,7 @@ impl slog::Value for BucketLimit {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Buckets {
     /// The method to use to sort values into buckets.
-    method: BucketMethod,
+    pub method: BucketMethod,
     /// The upper bounds of the buckets.
     limits: Vec<BucketLimit>,
 }
