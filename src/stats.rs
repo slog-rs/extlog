@@ -1,7 +1,8 @@
 //! Statistics generator for [`slog`].
 //!
-//! This crate allows for statistics - counters and gauges - to be automatically calculated and
-//! reported based on logged events.  The logged events MUST implement the [`ExtLoggable`] trait.
+//! This crate allows for statistics - counters gauges, and bucket counters - to be automatically
+//! calculated and reported based on logged events.  The logged events MUST implement the
+//! [`ExtLoggable`] trait.
 //!
 //! To support this, the [`slog-extlog-derive'] crate can be used to link logs to a specific
 //! statistic.   This generates fast, compile-time checking for statistics updates at the point
@@ -66,7 +67,7 @@ pub trait StatDefinition: fmt::Debug {
     fn stype(&self) -> StatType;
     /// An optional list of field names to group the statistic by.
     fn group_by(&self) -> Vec<&'static str>;
-
+    /// An optional set of numerical buckets to group the statistic by.
     fn buckets(&self) -> Option<Buckets>;
 }
 
@@ -94,11 +95,11 @@ pub trait StatDefinition: fmt::Debug {
 ///
 ///   - `StatName` is the externally-facing metric name.
 ///   - `Type` is the `StatType` of this statistic, for example `Counter`.
-///    Must be a valid subtype if that enum.
+///    Must be a valid subtype of that enum.
 ///   - `Description`  is a human readable description of the statistic.  This will be logged as
 ///   the log message,
 ///   - The list of `tags` define field names to group the statistic by.
-///    A non-empty list indicates that this statistic should be split into buckets,
+///    A non-empty list indicates that this statistic should be split into groups,
 ///   counting the stat separately for each different value of these fields that is seen.
 ///   These might be a remote hostname, say, or a tag field.
 ///     - If multiple tags are provided, the stat is counted separately for all distinct
@@ -106,63 +107,23 @@ pub trait StatDefinition: fmt::Debug {
 ///     - Use of this feature should be avoided for fields that can take very many values, such as
 ///   a subscriber number, or for large numbers of tags - each tag name and seen value adds a
 ///   performance dip and a small memory overhead that is never freed.
-
-// #[macro_export]
-// macro_rules! define_stats {
-//     // Entry point - match the full list
-//     ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*], ($bmethod:ident, [$($blimits:tt),*]))),*}) => {
-//         /// The list of statistics.
-//         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
-
-//         mod inner_stats {
-//         $(
-//                #[derive(Debug, Clone)]
-//                // Prometheus metrics are snake_case, so allow non-camel-case types here.
-//                #[allow(non_camel_case_types)]
-//                pub struct $stat;
-//             )*
-//         }
-
-//         $(define_stats!{@single $stat, $stype, $desc, $bmethod, [$($tags),*], [$($blimits:tt),*]})*
-//     };
-
-//       // Trait impl for StatDefinition
-//     (@single $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:tt),*]) => {
-
-//         // Suppress the warning about cases - this value is never going to be seen
-//         #[allow(non_upper_case_globals)]
-//         static $stat : inner_stats::$stat = inner_stats::$stat;
-
-//         impl $crate::stats::StatDefinition for inner_stats::$stat {
-//             /// The name of this statistic.
-//             fn name(&self) -> &'static str { stringify!($stat) }
-//             /// A human readable-description of the statistic, describing its meaning.
-//             fn description(&self) -> &'static str { $desc }
-//             /// The type
-//             fn stype(&self) -> $crate::stats::StatType { $crate::stats::StatType::$stype }
-//             /// An optional list of field names to group the statistic by.
-//             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
-
-//             fn buckets(&self) -> Option<Buckets> {
-//                 match self.stype() {
-//                     $crate::stats::StatType::BucketCounter => {
-//                         Some($crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
-//                             vec![$($blimits),* ],
-//                         ))
-//                     },
-//                     _ => None
-//                 }
-//             }
-//         }
-//     };
-
-//     ($name:ident = {$($stat:ident($stype:ident, $id:expr, $desc:expr, [$($tags:tt),*])),*}) => {
-//         define_stats! { $name = {$($stat($stype, $desc, [$($tags),*])),*} }
-//     };
-//     ($name:ident = {$($stat:ident($stype:ident, $desc:expr, [$($tags:tt),*])),*}) => {
-//         define_stats! { $name = {$($stat($stype, $desc,  [$($tags),*], (Freq, []))),*} }
-//     }
-// }
+///   - If the `Type` field is set to `BucketCounter`, then a `BucketMethod` and bucket limits must
+///     also be provided like so:
+///
+/// ```text
+///   define_stats!{
+///      STATS_LIST_NAME = {
+///          StatName(BucketCounter, "Description", ["tag1, "tag2", ...], (BucketMethod, [1, 2, 3, ...])),
+///          Stat Name2(...),
+///          ...
+///      }
+///   }
+/// ```
+///
+///   - The `BucketMethod` determines how the stat will be sorted into numerical buckets and should
+///   - be a subtype of that enum.
+///   - The bucket limits should be a list of `f64` values, each representing th upper bound of
+///     that bucket.
 
 #[macro_export]
 macro_rules! define_stats {
@@ -212,7 +173,7 @@ macro_rules! define_stats {
             fn stype(&self) -> $crate::stats::StatType { $crate::stats::StatType::$stype }
             /// An optional list of field names to group the statistic by.
             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
-
+            /// The numerical buckets and bucketing method used to group the statistic.
             fn buckets(&self) -> Option<Buckets> {
                 match self.stype() {
                     $crate::stats::StatType::BucketCounter => {
@@ -226,70 +187,6 @@ macro_rules! define_stats {
         }
     };
 }
-
-
-// #[macro_export]
-// macro_rules! define_stats {
-
-//     ($name:ident = {$($stat:ident($($details:tt),*)),*}) => {
-//         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
-
-//         mod inner_stats {
-//             $(
-//                 #[derive(Debug, Clone)]
-//                 // Prometheus metrics are snake_case, so allow non-camel-case types here.
-//                 #[allow(non_camel_case_types)]
-//                 pub struct $stat;
-//             )*
-//         }
-
-//         $(
-//             define_stats!{@single $stat, $($details),*}
-//         )*
-//     };
-
-//     (@single $stat:ident, BucketCounter($bmethod:ident, [$($blimits:tt),*]), $desc:expr, [$($tags:tt),*] ) => {
-//         define_stats!{@inner $stat, BucketCounter, $desc, $bmethod, [$($tags),*], [$($blimits:tt),*]}
-//     };
-
-//     (@single $stat:ident, $stype:ident, $desc:expr, [$($tags:tt),*] ) => {
-//         define_stats!{@inner $stat, $stype, $desc, Freq, [$($tags),*], []}
-//     };
-
-//       // Trait impl for StatDefinition
-//     (@inner $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:tt),*]) => {
-
-//         // Suppress the warning about cases - this value is never going to be seen
-//         #[allow(non_upper_case_globals)]
-//         static $stat : inner_stats::$stat = inner_stats::$stat;
-
-//         impl $crate::stats::StatDefinition for inner_stats::$stat {
-//             /// The name of this statistic.
-//             fn name(&self) -> &'static str { stringify!($stat) }
-//             /// A human readable-description of the statistic, describing its meaning.
-//             fn description(&self) -> &'static str { $desc }
-//             /// The type
-//             fn stype(&self) -> $crate::stats::StatType { $crate::stats::StatType::$stype }
-//             /// An optional list of field names to group the statistic by.
-//             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
-
-//             fn buckets(&self) -> Option<Buckets> {
-//                 match self.stype() {
-//                     $crate::stats::StatType::BucketCounter => {
-//                         Some($crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
-//                             vec![$($blimits),* ],
-//                         ))
-//                     },
-//                     _ => None
-//                 }
-//             }
-//         }
-//     };
-
-//     ($name:ident = {$($stat:ident($stype:ident, $id:expr, $desc:expr, [$($tags:tt),*])),*}) => {
-//         define_stats! { $name = {$($stat($stype, $desc, [$($tags),*])),*} }
-//     };
-// }
 
 /// A trait indicating that this statistic can be used to trigger a statistics change.
 pub trait StatTrigger {
@@ -306,6 +203,7 @@ pub trait StatTrigger {
     fn change(&self, _stat_id: &StatDefinition) -> Option<ChangeType> {
         None
     }
+    /// The value to be used to sort the statistic into the correct bucket(s).
     fn bucket_value(&self, _stat_id: &StatDefinition) -> Option<f64> {
         None
     }
@@ -323,14 +221,17 @@ pub enum ChangeType {
     SetTo(isize),
 }
 
-/// Used to represent the upper limit of a bucket
+/// Used to represent the upper limit of a bucket.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
 pub enum BucketLimit {
+    /// A numerical upper limit.
     Num(f64),
+    /// Represents a bucket with no upper limit.
     Unbounded,
 }
 
 impl BucketLimit {
+    /// Returns whether a given BucketLimit is less than or equal to self
     pub fn le<'a>(&self, other: &BucketLimit) -> bool {
         match (self, other) {
             (BucketLimit::Num(f1), BucketLimit::Num(f2)) => f1 <= f2,
@@ -354,20 +255,24 @@ impl slog::Value for BucketLimit {
     } // LCOV_EXCL_LINE Kcov bug?
 }
 
+/// A set of numerical buckets together with a method for sorting values into them.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Buckets {
+    /// The method to use to sort values into buckets.
     method: BucketMethod,
+    /// The upper bounds of the buckets.
     limits: Vec<BucketLimit>,
 }
 
 impl Buckets {
+    /// Create a new Buckets instance.
     pub fn new(method: BucketMethod, limits: Vec<f64>) -> Buckets {
         let mut limits: Vec<BucketLimit> = limits.iter().map(|f| BucketLimit::Num(*f)).collect();
         limits.push(BucketLimit::Unbounded);
         Buckets { method, limits }
     }
 
-    // return a vector containing the indices of the buckets that should be updated
+    /// return a vector containing the indices of the buckets that should be updated
     pub fn assign_buckets(&self, value: f64) -> Vec<usize> {
         match self.method {
             BucketMethod::CumulFreq => {
@@ -395,22 +300,22 @@ impl Buckets {
             }
         }
     }
-
+    /// The number of buckets.
     pub fn len(&self) -> usize {
         self.limits.len()
     }
-
+    /// Get the bound of an individual bucket by index.
     pub fn get(&self, index: usize) -> Option<BucketLimit> {
         self.limits.get(index).map(|l| *l)
     }
 }
 
-// Enum which is used to determine which buckets to update when a BucketCounter stat is updated
+/// Used to determine which buckets to update when a BucketCounter stat is updated
 #[derive(Debug, Clone, Copy, Serialize, PartialEq)]
 pub enum BucketMethod {
-    // When a value is recorded, only update the bucket it lands in
+    /// When a value is recorded, only update the bucket it lands in
     Freq,
-    // When a value us recorded, update its bucket and every higher bucket
+    /// When a value us recorded, update its bucket and every higher bucket
     CumulFreq,
 }
 
@@ -473,6 +378,8 @@ where
     /// Add a new statistic to this tracker.
     pub fn add_statistic(&mut self, defn: &'static (StatDefinition + Sync + RefUnwindSafe)) {
 
+        // if the definition specifies a set of buckets, add `StatValue`s to represent the
+        // bucketed values.
         let (buckets,
              bucket_values
         ) = if let Some(buckets) = defn.buckets(){
@@ -711,9 +618,9 @@ pub struct StatLogData<'a> {
     pub name: &'static str,
     /// The current value.
     pub value: f64,
-    /// The groups and name
+    /// The groups and name.
     pub tags: Vec<(&'static str, &'a str)>,
-    /// The upper bound of the bucket the stat is in
+    /// The upper bound of the bucket the stat is in.
     pub bucket: Option<BucketLimit>,
 }
 
@@ -892,7 +799,7 @@ impl StatSnapshot {
     }
 }
 
-/// A snapshot of a current (possibly grouped) value for a stat.
+/// A snapshot of a current (possibly grouped and/or bucketed ) value for a stat.
 // LCOV_EXCL_START not interesting to track automatic derive coverage
 #[derive(Debug)]
 pub struct StatSnapshotValue {
@@ -929,11 +836,12 @@ struct Stat {
     is_grouped: bool,
     // The fields the stat is grouped by.  If empty, then there is no grouping.
     group_values: RwLock<HashMap<String, StatValue>>,
-
+    // The (optional) numerical buckets the stat will be grouped by.
     buckets: Option<Buckets>,
-
+    // The bucketed stat values. If empty, there is no bucketing.
     bucket_values: Vec<StatValue>,
-
+    // The stat values grouped by bucket and fields. Non-empty only if the stat is
+    // both bucketed and grouped.
     bucket_group_values: RwLock<HashMap<String,Vec<StatValue>>>,
 }
 // LCOV_EXCL_STOP
@@ -949,7 +857,7 @@ impl Stat {
             .collect::<Vec<_>>()
     }
 
-    // Get all the grouped/bucketed value names currently tracked.
+    /// Get all the grouped/bucketed value names currently tracked.
     fn get_bucket_group_name_vals(&self) -> Vec<(Option<String>, Option<usize>, f64)> {
         let values = if let Some(_) = self.buckets {
             if self.is_grouped {
@@ -981,11 +889,14 @@ impl Stat {
         values
     }
 
+    /// Update the stat's value(s) according to the given `StatTrigger` and `StatDefinition`.
     fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
         let change = trigger.change(defn).expect("Bad log definition");
+        // update the stat value
         self.value.update(&change);
 
         if self.is_grouped {
+            // update the grouped values
             let tag_values = self.defn
                 .group_by()
                 .iter()
@@ -1014,6 +925,7 @@ impl Stat {
             }
 
             if let Some(ref buckets) = self.buckets {
+                // update the grouped and bucketed values
                 let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
                 let buckets_to_update = buckets.assign_buckets(bucket_value);
 
@@ -1047,6 +959,7 @@ impl Stat {
         }
 
         if let Some(ref buckets) = self.buckets {
+            // update the bucketed values
             let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
             let buckets_to_update = buckets.assign_buckets(bucket_value);
 
@@ -1057,37 +970,6 @@ impl Stat {
                     .update(&change);
             }
         }
-
-
-        // // old
-        // if let Some(ref buckets) = self.buckets {
-        //     let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
-        //     let buckets_to_update = buckets.assign_buckets(bucket_value);
-
-        //     for index in buckets_to_update.iter() {
-
-        //         // Use an inner block here to ensure the read lock drops out of scope.
-        //         {
-        //             self.bucket_values
-        //                 .get(*index)
-        //                 .expect("Invalid bucket index")
-        //                 .update(&trigger.change(defn).expect("Bad log definition"));
-        //         }
-
-        //         if self.is_grouped {
-        //             let tag_values = self.defn
-        //                 .group_by()
-        //                 .iter()
-        //                 .map(|n| trigger.tag_value(defn, n))
-        //                 .collect::<Vec<String>>()
-        //                 .join(","); // LCOV_EXCL_LINE Kcov bug?
-
-        //             let lock = &self.bucket_group_values.get(*index).expect("Invalid bucket index");
-
-        //             update_tagged_value(lock, &trigger.change(defn).expect("Bad log definition"), tag_values);
-        //         }
-        //     }
-        // }
     }
 
     /// Get the current values for this stat as a MetricFamily

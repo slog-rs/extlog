@@ -322,7 +322,7 @@ fn get_types_bounds(
 }
 
 fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
-    // Get stat triggering details.roups.
+    // Get stat triggering details.
     let triggers = ast.attrs
         .iter()
         .filter(|a| a.name() == "StatTrigger")
@@ -744,22 +744,6 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
         None
     };
 
-    // let bucket_data = if let syn::Body::Struct(syn::VariantData::Struct(ref fields)) = *body {
-    //     let bucket_field = fields.iter().find(|f| {
-    //         f.attrs
-    //             .iter()
-    //             .any(|a| a.name() == "BucketBy" && is_attr_stat_id(a, &id))
-    //     });
-
-    //     if let Some(bucket_field) = bucket_field {
-    //         Some(parse_buckets(bucket_field, &id))
-    //     } else {
-    //         None
-    //     }
-    // } else {
-    //     None
-    // };
-
     StatTriggerData {
         id,
         // If no condition is provided, default to always passing.  Unwrap is OK here as we are
@@ -772,37 +756,3 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
     }
 }
 // LCOV_EXCL_STOP
-//
-
-// struct BucketData {
-//     bucket_field_id: syn::Ident,
-//     bucket_limits: Vec<f64>,
-// }
-
-// fn parse_buckets(field: &syn::Field, id: &syn::Ident) -> BucketData {
-//     let attr = field
-//         .attrs
-//         .iter()
-//         .find(|a| a.name() == "BucketBy" && is_attr_stat_id(a, id))
-//         .expect("didn't find BucketBy attribute");
-
-//     let bucket_limits = if let syn::MetaItem::List(_, ref items) = attr.value {
-//         items
-//             .iter()
-//             .map(|item| {
-//                 if let syn::NestedMetaItem::Literal(syn::Lit::Float(s, _)) = item {
-//                     s.parse::<f64>().expect("Could not parse a bucket value")
-//                 } else {
-//                     panic!("Could not parse a bucket value");
-//                 }
-//             })
-//             .collect()
-//     } else {
-//         panic!("Could not parse a bucket value");
-//     };
-
-//     BucketData {
-//         bucket_field_id: field.ident.clone().expect("No ident"),
-//         bucket_limits,
-//     }
-// }

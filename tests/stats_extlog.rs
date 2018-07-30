@@ -11,7 +11,7 @@ extern crate slog_extlog;
 extern crate slog_extlog_derive;
 
 use slog_extlog::slog_test::*;
-use slog_extlog::stats::*;
+// use slog_extlog::stats::*;
 use std::{panic, thread, time};
 
 const CRATE_LOG_NAME: &str = "SLOG_STATS_TRACKER_TEST";
