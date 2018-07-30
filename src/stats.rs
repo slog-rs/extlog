@@ -259,6 +259,15 @@ impl slog::Value for BucketLimit {
     } // LCOV_EXCL_LINE Kcov bug?
 }
 
+impl fmt::Display for BucketLimit {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            BucketLimit::Num(val) => write!(f, "{}", val),
+            BucketLimit::Unbounded => write!(f, "Unbounded"),
+        }
+    }
+}
+
 /// A set of numerical buckets together with a method for sorting values into them.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Buckets {
