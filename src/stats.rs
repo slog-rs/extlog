@@ -82,7 +82,7 @@ pub trait StatDefinition: fmt::Debug {
 ///   define_stats!{
 ///      STATS_LIST_NAME = {
 ///          StatName(Type, "Description", ["tag1, "tag2", ...]),
-///          Stat Name2(...),
+///          StatName2(...),
 ///          ...
 ///      }
 ///   }
@@ -107,14 +107,14 @@ pub trait StatDefinition: fmt::Debug {
 ///     - Use of this feature should be avoided for fields that can take very many values, such as
 ///   a subscriber number, or for large numbers of tags - each tag name and seen value adds a
 ///   performance dip and a small memory overhead that is never freed.
-///   - If the `Type` field is set to `BucketCounter`, then a `BucketMethod` and bucket limits must
+///   - If the `Type` field is set to `BucketCounter`, then a `BucketMethod`, bucket label and bucket limits must
 ///     also be provided like so:
 ///
 /// ```text
 ///   define_stats!{
 ///      STATS_LIST_NAME = {
-///          StatName(BucketCounter, "Description", ["tag1, "tag2", ...], (BucketMethod, [1, 2, 3, ...])),
-///          Stat Name2(...),
+///          StatName(BucketCounter, "Description", ["tag1, "tag2", ...], (BucketMethod, "bucket_label", [1, 2, 3, ...])),
+///          StatName2(...),
 ///          ...
 ///      }
 ///   }
@@ -124,6 +124,7 @@ pub trait StatDefinition: fmt::Debug {
 ///   - be a subtype of that enum.
 ///   - The bucket limits should be a list of `f64` values, each representing th upper bound of
 ///     that bucket.
+///   - The bucket label should be describe what the buckets measure.
 
 #[macro_export]
 macro_rules! define_stats {
@@ -147,22 +148,22 @@ macro_rules! define_stats {
     };
 
     // `BucketCounter`s require a `BucketMethod` and bucket limits
-    (@single $stat:ident, BucketCounter, $desc:expr, [$($tags:tt),*], ($bmethod:ident, [$($blimits:expr),*]) ) => {
+    (@single $stat:ident, BucketCounter, $desc:expr, [$($tags:tt),*], ($bmethod:ident, $blabel:expr, [$($blimits:expr),*]) ) => {
         define_stats!{@inner $stat, BucketCounter, $desc, $bmethod, [$($tags),*], [$($blimits),*]}
     };
 
     // Non `BucketCounter` stat types
     (@single $stat:ident, $stype:ident, $desc:expr, [$($tags:tt),*] ) => {
-        define_stats!{@inner $stat, $stype, $desc, Freq, [$($tags),*], []}
+        define_stats!{@inner $stat, $stype, $desc, Freq, "", [$($tags),*], []}
     };
 
     // Retained for backwards-compatibility
     (@single $stat:ident, $stype:ident, $id:expr, $desc:expr, [$($tags:tt),*] ) => {
-        define_stats!{@inner $stat, $stype, $desc, Freq, [$($tags),*], []}
+        define_stats!{@inner $stat, $stype, $desc, Freq, "", [$($tags),*], []}
     };
 
     // Trait impl for StatDefinition
-    (@inner $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, [$($tags:tt),*], [$($blimits:expr),*]) => {
+    (@inner $stat:ident, $stype:ident, $desc:expr, $bmethod:ident, $blabel:expr, [$($tags:tt),*], [$($blimits:expr),*]) => {
 
         // Suppress the warning about cases - this value is never going to be seen
         #[allow(non_upper_case_globals)]
@@ -182,6 +183,7 @@ macro_rules! define_stats {
                 match self.stype() {
                     $crate::stats::StatType::BucketCounter => {
                         Some($crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
+                            $blabel,
                             vec![$($blimits as f64),* ],
                         ))
                     },
@@ -273,16 +275,22 @@ impl fmt::Display for BucketLimit {
 pub struct Buckets {
     /// The method to use to sort values into buckets.
     pub method: BucketMethod,
+    /// Label name describing what the buckets measure.
+    pub label_name: &'static str,
     /// The upper bounds of the buckets.
     limits: Vec<BucketLimit>,
 }
 
 impl Buckets {
     /// Create a new Buckets instance.
-    pub fn new(method: BucketMethod, limits: Vec<f64>) -> Buckets {
+    pub fn new(method: BucketMethod, label_name: &'static str, limits: Vec<f64>) -> Buckets {
         let mut limits: Vec<BucketLimit> = limits.iter().map(|f| BucketLimit::Num(*f)).collect();
         limits.push(BucketLimit::Unbounded);
-        Buckets { method, limits }
+        Buckets {
+            method,
+            label_name,
+            limits,
+        }
     }
 
     /// return a vector containing the indices of the buckets that should be updated
@@ -443,6 +451,7 @@ where
         for stat in self.stats.values() {
             // Log all the grouped and bucketed values.
             let outputs = stat.get_bucket_group_name_vals();
+            let bucket_label_name = stat.defn.buckets().map(|buckets| buckets.label_name);
 
             // The `outputs` is a vector of tuples containing the (tag value, bucket_index, stat value).
             for (name, bucket_index, val) in outputs {
@@ -450,12 +459,26 @@ where
                 let bucket = bucket_index
                     .and_then(|i| stat.buckets.as_ref().and_then(|buckets| buckets.get(i)));
 
-                // The tags require a vector of (tag name, tag value) types, so get these.
-                let tags = if let Some(ref name) = name {
+                // `bucket_str` must be in scope before `tags` to satisfy lifetime bounds.
+                let (bucket_label_name, ref bucket_str) =
+                    if let (Some(bucket_label_name), Some(bucket)) = (bucket_label_name, bucket) {
+                        (Some(bucket_label_name), bucket.to_string())
+                    } else {
+                        (None, "".to_string())
+                    };
+
+                // The tags require a vector of (tag name, tag value) types, so get these if present.
+                let mut tags = if let Some(ref name) = name {
                     stat.get_tags(name)
                 } else {
                     vec![]
                 };
+
+                // For logging purposes we treat the bucket data as another (tag name tag value) pair.
+                if let Some(bucket_label_name) = bucket_label_name {
+                    tags.push((bucket_label_name, bucket_str))
+                }
+
                 T::log_stat(
                     &logger,
                     &StatLogData {
@@ -464,7 +487,6 @@ where
                         description: stat.defn.description(),
                         value: val,
                         tags,
-                        bucket,
                     },
                 ); // LCOV_EXCL_LINE Kcov bug?
             }
@@ -629,8 +651,6 @@ pub struct StatLogData<'a> {
     pub value: f64,
     /// The groups and name.
     pub tags: Vec<(&'static str, &'a str)>,
-    /// The upper bound of the bucket the stat is in.
-    pub bucket: Option<BucketLimit>,
 }
 
 /// Structure to use for the default implementation of `StatisticsLogFormatter`.
@@ -658,8 +678,7 @@ impl StatisticsLogFormatter for DefaultStatisticsLogFormatter {
                "description" => stat.description,
                "value" => stat.value,
                "tags" => stat.tags.iter().
-                   map(|x| format!("{}={}", x.0, x.1)).collect::<Vec<_>>().join(","),
-               "bucket" => stat.bucket)
+                   map(|x| format!("{}={}", x.0, x.1)).collect::<Vec<_>>().join(","))
     }
 }
 

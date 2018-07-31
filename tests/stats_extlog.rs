@@ -27,9 +27,9 @@ define_stats! {
         test_double_grouped(Counter, "Test counter grouped by type and error",
                                ["name", "error"]),
         test_latest_foo_error_count(Counter, "Latest foo error byte count", []),
-        test_bucket_counter_freq(BucketCounter, "Test bucket counter", [], (Freq, [1,2,3,4])),
-        test_bucket_counter_cumul_freq(BucketCounter, "Test cumulative bucket counter", [], (CumulFreq, [1,2,3,4])),
-        test_bucket_counter_grouped(BucketCounter, "Test bucket counter grouped by name and error", ["name", "error"], (Freq, [-5, 5]))
+        test_bucket_counter_freq(BucketCounter, "Test bucket counter", [], (Freq, "bucket", [1,2,3,4])),
+        test_bucket_counter_cumul_freq(BucketCounter, "Test cumulative bucket counter", [], (CumulFreq, "bucket", [1,2,3,4])),
+        test_bucket_counter_grouped(BucketCounter, "Test bucket counter grouped by name and error", ["name", "error"], (Freq, "bucket", [-5, 5]))
     }
 }
 

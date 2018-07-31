@@ -24,18 +24,18 @@ define_stats! {
         test_gauge(Gauge, "Test gauge", []),
         test_grouped_counter(Counter, "Test grouped counter", ["counter_group_one", "counter_group_two"]),
         test_grouped_gauge(Gauge, "Test grouped gauge", ["gauge_group_one", "gauge_group_two"]),
-        test_bucket_counter_freq(BucketCounter, "Test bucket counter", [], (Freq, [1, 2, 3])),
+        test_bucket_counter_freq(BucketCounter, "Test bucket counter", [], (Freq, "bucket", [1, 2, 3])),
         test_bucket_counter_cumul_freq(
             BucketCounter,
             "Test cumulative bucket counter",
             [],
-            (CumulFreq, [1.5, 2.5, 3.5])
+            (CumulFreq, "bucket", [1.5, 2.5, 3.5])
         ),
         test_group_bucket_counter(
             BucketCounter,
             "Test cumulative bucket counter with groups",
             ["group1", "group2"],
-            (CumulFreq, [-1.5, 0])
+            (CumulFreq, "bucket", [-1.5, 0])
         )
     }
 }
