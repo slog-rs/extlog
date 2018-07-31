@@ -416,7 +416,11 @@ fn request_for_bucket_counter_freq_one_value() {
 
     assert_eq!(
         stats[0].definition.buckets(),
-        Some(Buckets::new(BucketMethod::Freq, vec![1f64, 2f64, 3f64]))
+        Some(Buckets::new(
+            BucketMethod::Freq,
+            "bucket",
+            vec![1f64, 2f64, 3f64]
+        ))
     );
 
     check_expected_stat_snaphots(
@@ -459,7 +463,11 @@ fn request_for_bucket_counter_cumul_freq() {
 
     assert_eq!(
         stats[0].definition.buckets(),
-        Some(Buckets::new(BucketMethod::CumulFreq, vec![1.5, 2.5, 3.5]))
+        Some(Buckets::new(
+            BucketMethod::CumulFreq,
+            "bucket",
+            vec![1.5, 2.5, 3.5]
+        ))
     );
 
     check_expected_stat_snaphots(
@@ -522,7 +530,11 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
 
     assert_eq!(
         stats[0].definition.buckets(),
-        Some(Buckets::new(BucketMethod::CumulFreq, vec![-1.5f64, 0f64]))
+        Some(Buckets::new(
+            BucketMethod::CumulFreq,
+            "bucket",
+            vec![-1.5f64, 0f64]
+        ))
     );
 
     check_expected_stat_snaphots(

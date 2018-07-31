@@ -147,9 +147,9 @@ macro_rules! define_stats {
         )*
     };
 
-    // `BucketCounter`s require a `BucketMethod` and bucket limits
+    // `BucketCounter`s require a `BucketMethod`, bucket label and bucket limits
     (@single $stat:ident, BucketCounter, $desc:expr, [$($tags:tt),*], ($bmethod:ident, $blabel:expr, [$($blimits:expr),*]) ) => {
-        define_stats!{@inner $stat, BucketCounter, $desc, $bmethod, [$($tags),*], [$($blimits),*]}
+        define_stats!{@inner $stat, BucketCounter, $desc, $bmethod, $blabel, [$($tags),*], [$($blimits),*]}
     };
 
     // Non `BucketCounter` stat types

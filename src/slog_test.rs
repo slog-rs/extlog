@@ -169,16 +169,6 @@ pub struct ExpectedStat {
     pub tag: Option<&'static str>,
     pub value: f64,
     pub metric_type: &'static str,
-    pub bucket: Option<BucketLimit>,
-}
-
-impl BucketLimit {
-    fn equals(&self, value: &serde_json::Value) -> bool {
-        match self {
-            BucketLimit::Num(f) => value.as_f64() == Some(*f),
-            BucketLimit::Unbounded => value == "Unbounded",
-        }
-    }
 }
 
 /// Asserts that a set of logs (retrieved using `logs_in_range)` is exactly equal to an
@@ -191,7 +181,6 @@ pub fn check_expected_stats(logs: &[serde_json::Value], mut expected_stats: Vec<
         for (id, exp) in expected_stats.iter().enumerate() {
             if log["name"] == exp.stat_name
                 && (exp.tag.is_none() || log["tags"] == exp.tag.unwrap())
-                && (exp.bucket.is_none() || exp.bucket.unwrap().equals(&log["bucket"]))
             {
                 assert_eq!(logs[0]["metric_type"], exp.metric_type);
                 assert_eq!(log["value"].as_f64(), Some(exp.value));
