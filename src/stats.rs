@@ -179,7 +179,7 @@ macro_rules! define_stats {
             /// An optional list of field names to group the statistic by.
             fn group_by(&self) -> Vec<&'static str> { vec![$($tags),*] }
             /// The numerical buckets and bucketing method used to group the statistic.
-            fn buckets(&self) -> Option<Buckets> {
+            fn buckets(&self) -> Option<$crate::stats::Buckets> {
                 match self.stype() {
                     $crate::stats::StatType::BucketCounter => {
                         Some($crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
