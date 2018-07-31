@@ -223,6 +223,9 @@ pub fn check_expected_stat_snaphots(
         assert!(found_stat.is_some(), "Failed to find stat {}", stat.name);
         let found_stat = found_stat.unwrap();
 
+        println!("expected stat: {:?}", stat);
+        println!("found stat: {:?}", found_stat);
+
         assert_eq!(found_stat.definition.stype(), stat.stat_type);
         assert_eq!(found_stat.definition.description(), stat.description);
 
