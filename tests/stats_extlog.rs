@@ -636,7 +636,6 @@ fn test_extloggable_bucket_counter_grouped() {
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
     let logs = get_stat_logs("test_bucket_counter_grouped", &mut data);
-    println!("logs: {:?}", logs);
     assert_eq!(logs.len(), 6);
 
     check_expected_stats(
