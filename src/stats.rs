@@ -474,7 +474,7 @@ where
                     vec![]
                 };
 
-                // For logging purposes we treat the bucket data as another (tag name tag value) pair.
+                // For logging purposes we treat the bucket data as another (tag name, tag value) pair.
                 if let Some(bucket_label_name) = bucket_label_name {
                     tags.push((bucket_label_name, bucket_str))
                 }

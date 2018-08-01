@@ -621,7 +621,6 @@ fn request_for_many_metrics() {
     );
 
     let stats = logger.get_stats();
-    println!("stats: {:?}", stats);
     check_expected_stat_snaphots(
         &stats,
         &vec![
