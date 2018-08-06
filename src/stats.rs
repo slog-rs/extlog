@@ -398,27 +398,11 @@ where
 
     /// Add a new statistic to this tracker.
     pub fn add_statistic(&mut self, defn: &'static (StatDefinition + Sync + RefUnwindSafe)) {
-        // if the definition specifies a set of buckets, add `StatValue`s to represent the
-        // bucketed values.
-        let (buckets, bucket_values) = if let Some(buckets) = defn.buckets() {
-            let buckets_len = buckets.len();
-            let mut bucket_values = Vec::new();
-            bucket_values.reserve_exact(buckets_len);
-            for _ in 0..buckets_len {
-                bucket_values.push(StatValue::new(0, 1));
-            }
-            (Some(buckets), bucket_values)
-        } else {
-            (None, Vec::new())
-        };
-
         let stat = Stat {
             defn,
             is_grouped: !defn.group_by().is_empty(),
             group_values: RwLock::new(HashMap::new()),
-            buckets,
-            bucket_values: bucket_values,
-            bucket_group_values: RwLock::new(HashMap::new()),
+            stat_type_data: StatTypeData::new(defn),
             value: StatValue::new(0, 1),
         }; // LCOV_EXCL_LINE Kcov bug?
 
@@ -448,36 +432,17 @@ where
     ///
     /// This function is usually just called on a timer by the logger directly.
     pub fn log_all(&self, logger: &StatisticsLogger<T>) {
+
+
         for stat in self.stats.values() {
             // Log all the grouped and bucketed values.
-            let outputs = stat.get_bucket_group_name_vals();
-            let bucket_label_name = stat.defn.buckets().map(|buckets| buckets.label_name);
+            let outputs = stat.get_tagged_vals();
 
             // The `outputs` is a vector of tuples containing the (tag value, bucket_index, stat value).
-            for (name, bucket_index, val) in outputs {
-                // Get the upper bound of the bucket at the given index if present.
-                let bucket = bucket_index
-                    .and_then(|i| stat.buckets.as_ref().and_then(|buckets| buckets.get(i)));
-
-                // `bucket_str` must be in scope before `tags` to satisfy lifetime bounds.
-                let (bucket_label_name, ref bucket_str) =
-                    if let (Some(bucket_label_name), Some(bucket)) = (bucket_label_name, bucket) {
-                        (Some(bucket_label_name), bucket.to_string())
-                    } else {
-                        (None, "".to_string())
-                    };
+            for (tag_values, val) in outputs {
 
                 // The tags require a vector of (tag name, tag value) types, so get these if present.
-                let mut tags = if let Some(ref name) = name {
-                    stat.get_tags(name)
-                } else {
-                    vec![]
-                };
-
-                // For logging purposes we treat the bucket data as another (tag name, tag value) pair.
-                if let Some(bucket_label_name) = bucket_label_name {
-                    tags.push((bucket_label_name, bucket_str))
-                }
+                let tags = stat.get_tag_pairs(&tag_values);
 
                 T::log_stat(
                     &logger,
@@ -490,6 +455,7 @@ where
                     },
                 ); // LCOV_EXCL_LINE Kcov bug?
             }
+
         }
     }
 
@@ -851,8 +817,172 @@ impl StatSnapshotValue {
 ///////////////////////////
 // Private types and private methods.
 ///////////////////////////
-// LCOV_EXCL_START not interesting to track automatic derive coverage
 
+#[derive(Debug)]
+enum StatTypeData {
+    Counter,
+    Gauge,
+    BucketCounter(BucketCounterData),
+}
+
+impl StatTypeData {
+    fn new(defn: &'static StatDefinition) -> Self {
+        match defn.stype() {
+            StatType::Counter => StatTypeData::Counter,
+            StatType::Gauge => StatTypeData::Gauge,
+            StatType::BucketCounter => {
+                StatTypeData::BucketCounter(
+                    BucketCounterData::new(defn.buckets().expect("Stat definition with type BucketCounter did not contain bucket info"))
+                )
+            }
+        }
+    }
+
+    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger, is_grouped: bool) {
+        if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
+            bucket_counter_data.update(defn, trigger, is_grouped);
+        }
+    }
+
+    fn get_tag_pairs<'a, 'b, 'c>(&'a self, tag_values: &'b str, defn: &'c StatDefinition) -> Option<Vec<(&'static str, &'b str)>> {
+        if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
+            Some(bucket_counter_data.get_tag_pairs(tag_values, defn))
+        } else {
+            None
+        }
+    }
+
+    fn get_tagged_vals(&self, is_grouped: bool) -> Option<Vec<(String, f64)>> {
+        if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
+            Some(bucket_counter_data.get_tagged_vals(is_grouped))
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BucketCounterData {
+    buckets: Buckets,
+    bucket_values: Vec<StatValue>,
+    bucket_group_values: RwLock<HashMap<String, Vec<StatValue>>>,
+}
+
+impl BucketCounterData {
+    fn new(buckets: Buckets) -> Self {
+        let buckets_len = buckets.len();
+        let mut bucket_values = Vec::new();
+        bucket_values.reserve_exact(buckets_len);
+        for _ in 0..buckets_len {
+            bucket_values.push(StatValue::new(0, 1));
+        }
+
+        BucketCounterData {
+            buckets,
+            bucket_values,
+            bucket_group_values: RwLock::new(HashMap::new()),
+        }
+    }
+
+    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger, is_grouped: bool) {
+        let change = trigger.change(defn).expect("Bad log definition");
+        // update the bucketed values
+        let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
+        let buckets_to_update = self.buckets.assign_buckets(bucket_value);
+
+        for index in buckets_to_update.iter() {
+            self.bucket_values
+                .get(*index)
+                .expect("Invalid bucket index")
+                .update(&change);
+        }
+
+        if is_grouped {
+            // update the grouped and bucketed values
+
+            let tag_values = defn
+                .group_by()
+                .iter()
+                .map(|n| trigger.tag_value(defn, n))
+                .collect::<Vec<String>>()
+                .join(","); // LCOV_EXCL_LINE Kcov bug?
+
+            let found_values = {
+                let inner_vals = self.bucket_group_values.read().expect("Poisoned lock");
+                if let Some(tagged_bucket_vals) = inner_vals.get(&tag_values) {
+                    update_bucket_values(tagged_bucket_vals, &buckets_to_update, &change);
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if !found_values {
+                // we didn't find bucketed values for this tag combination. Create them now.
+                let mut new_bucket_vals = Vec::new();
+                let bucket_len = self.buckets.len();
+                new_bucket_vals.reserve_exact(bucket_len);
+                for _ in 0..bucket_len {
+                    new_bucket_vals.push(StatValue::new(0, 1));
+                }
+
+                let mut inner_vals = self.bucket_group_values.write().expect("Poisoned lock");
+                // It's possible that while we were waiting for the write lock another thread got
+                // in and created the bucketed entries, so check again.
+                let vals = inner_vals
+                    .entry(tag_values)
+                    .or_insert_with(|| new_bucket_vals);
+
+                update_bucket_values(vals, &buckets_to_update, &change);
+            }
+        }
+    }
+
+    fn get_tag_pairs<'a, 'b, 'c>(&'a self, tag_values: &'b str, defn: &'c StatDefinition) -> Vec<(&'static str, &'b str)> {
+        let mut tag_names = defn
+            .group_by();
+        // add the bucket label name as an additional tag name
+        tag_names
+            .push(self.buckets.label_name);
+        tag_names
+            .iter()
+            .cloned()
+            .zip(tag_values.split(','))
+            .collect::<Vec<_>>()
+    }
+
+    fn get_tagged_vals(&self, is_grouped: bool) -> Vec<(String, f64)> {
+        if is_grouped {
+            let mut tag_bucket_vals = Vec::new();
+
+            {
+                // Only hold the read lock long enough to get the keys, bucket indices, and values.
+                let inner_vals = self.bucket_group_values.read().expect("Poisoned lock)");
+
+                for (group_values_str, bucket_values) in inner_vals.iter() {
+                    for (index, val) in bucket_values.iter().enumerate() {
+                        tag_bucket_vals.push((group_values_str.to_string(), index, val.as_float()));
+                    }
+                }
+            }
+
+            tag_bucket_vals.into_iter().map(|(mut tag_values, index, val)| {
+                let bucket = self.buckets.get(index).expect("Invalid bucket index");
+                // add the bucket label value as an additional tag value
+                tag_values.push_str(&format!(",{}", bucket.to_string()));
+                (tag_values, val)
+            }).collect()
+
+        } else {
+            self.bucket_values.iter().enumerate().map(|(index, val)| {
+                let bucket = self.buckets.get(index).expect("Invalid bucket index");
+                (bucket.to_string(), val.as_float())
+            }).collect()
+        }
+    }
+}
+
+// LCOV_EXCL_START not interesting to track automatic derive coverage
 // The internal representation of a tracked statistic.
 #[derive(Debug)]
 struct Stat {
@@ -864,65 +994,51 @@ struct Stat {
     is_grouped: bool,
     // The fields the stat is grouped by.  If empty, then there is no grouping.
     group_values: RwLock<HashMap<String, StatValue>>,
-    // The (optional) numerical buckets the stat will be grouped by.
-    buckets: Option<Buckets>,
-    // The bucketed stat values. If empty, there is no bucketing.
-    bucket_values: Vec<StatValue>,
-    // The stat values grouped by bucket and fields. Non-empty only if the stat is
-    // both bucketed and grouped.
-    bucket_group_values: RwLock<HashMap<String, Vec<StatValue>>>,
+    // Data specific to the stat type
+    stat_type_data: StatTypeData, // // The (optional) numerical buckets the stat will be grouped by.
+                                  // buckets: Option<Buckets>,
+                                  // // The bucketed stat values. If empty, there is no bucketing.
+                                  // bucket_values: Vec<StatValue>,
+                                  // // The stat values grouped by bucket and fields. Non-empty only if the stat is
+                                  // // both bucketed and grouped.
+                                  // bucket_group_values: RwLock<HashMap<String, Vec<StatValue>>>
 }
 // LCOV_EXCL_STOP
 
 impl Stat {
     // Get all the tags for this stat as a vector of (name, value) tuples.
-    fn get_tags<'a, 'b>(&'a self, name: &'b str) -> Vec<(&'static str, &'b str)> {
-        self.defn
-            .group_by()
-            .iter()
-            .cloned()
-            .zip(name.split(','))
-            .collect::<Vec<_>>()
+    fn get_tag_pairs<'a, 'b>(&'a self, tag_values: &'b str) -> Vec<(&'static str, &'b str)> {
+        self.stat_type_data.get_tag_pairs(tag_values, self.defn).unwrap_or_else(|| {
+            self.defn
+                .group_by()
+                .iter()
+                .cloned()
+                .zip(tag_values.split(','))
+                .collect::<Vec<_>>()
+        })
     }
 
     /// Get all the grouped/bucketed value names currently tracked.
-    fn get_bucket_group_name_vals(&self) -> Vec<(Option<String>, Option<usize>, f64)> {
-        let values = if let Some(_) = self.buckets {
-            if self.is_grouped {
-                let mut bucket_group_vals = Vec::new();
-                let inner_vals = self.bucket_group_values.read().expect("Poisoned lock)");
-                for (group_values_str, bucket_vals) in inner_vals.iter() {
-                    bucket_group_vals.extend(bucket_vals.iter().enumerate().map(|(i, val)| {
-                        (Some(group_values_str.to_string()), Some(i), val.as_float())
-                    }));
-                }
-                bucket_group_vals
-            } else {
-                self.bucket_values
-                    .iter()
-                    .enumerate()
-                    .map(|(index, value)| (None, Some(index), value.as_float()))
-                    .collect()
-            }
-        } else {
+    fn get_tagged_vals(&self) -> Vec<(String, f64)> {
+        self.stat_type_data.get_tagged_vals(self.is_grouped).unwrap_or_else(|| {
             if self.is_grouped {
                 // Only hold the read lock long enough to get the keys and values.
                 let inner_vals = self.group_values.read().expect("Poisoned lock)");
                 inner_vals
                     .iter()
                     .map(|(group_values_str, value)| {
-                        (Some(group_values_str.to_string()), None, value.as_float())
+                        (group_values_str.to_string(), value.as_float())
                     })
                     .collect()
             } else {
-                vec![(None, None, self.value.as_float())]
+                vec![("".to_string(), self.value.as_float())]
             }
-        };
-        values
+        })
     }
 
     /// Update the stat's value(s) according to the given `StatTrigger` and `StatDefinition`.
     fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
+
         let change = trigger.change(defn).expect("Bad log definition");
         // update the stat value
         self.value.update(&change);
@@ -957,75 +1073,31 @@ impl Stat {
 
                 val.update(&change);
             }
-
-            if let Some(ref buckets) = self.buckets {
-                // update the grouped and bucketed values
-                let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
-                let buckets_to_update = buckets.assign_buckets(bucket_value);
-
-                let found_values = {
-                    let inner_vals = self.bucket_group_values.read().expect("Poisoned lock");
-                    if let Some(tagged_bucket_vals) = inner_vals.get(&tag_values) {
-                        update_bucket_values(tagged_bucket_vals, &buckets_to_update, &change);
-                        true
-                    } else {
-                        false
-                    }
-                };
-
-                if !found_values {
-                    // we didn't find bucketed values for this tag combination. Create them now.
-                    let mut new_bucket_vals = Vec::new();
-                    let bucket_len = buckets.len();
-                    new_bucket_vals.reserve_exact(bucket_len);
-                    for _ in 0..bucket_len {
-                        new_bucket_vals.push(StatValue::new(0, 1));
-                    }
-
-                    let mut inner_vals = self.bucket_group_values.write().expect("Poisoned lock");
-                    // It's possible that while we were waiting for the write lock another thread got
-                    // in and created the bucketed entries, so check again.
-                    let vals = inner_vals
-                        .entry(tag_values)
-                        .or_insert_with(|| new_bucket_vals);
-
-                    update_bucket_values(vals, &buckets_to_update, &change);
-                }
-            }
         }
 
-        if let Some(ref buckets) = self.buckets {
-            // update the bucketed values
-            let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
-            let buckets_to_update = buckets.assign_buckets(bucket_value);
-
-            for index in buckets_to_update.iter() {
-                self.bucket_values
-                    .get(*index)
-                    .expect("Invalid bucket index")
-                    .update(&change);
-            }
-        }
+        // update type-specific stat data
+        self.stat_type_data.update(defn, trigger, self.is_grouped);
     }
 
     /// Get the current values for this stat as a MetricFamily
     fn get_snapshot(&self) -> StatSnapshot {
-        let values = self.get_bucket_group_name_vals()
-            .iter()
-            .map(|(group_values_str, bucket_index, value)| {
-                let group_values = if let Some(group_values_str) = group_values_str {
-                    group_values_str
-                        .split(",")
-                        .map(|group| group.to_string())
-                        .collect::<Vec<_>>()
-                } else {
-                    vec![]
-                };
-                (StatSnapshotValue::new(group_values, *bucket_index, *value))
-            })
-            .collect();
+        panic!();
+        // let values = self.get_bucket_group_name_vals()
+        //     .iter()
+        //     .map(|(group_values_str, bucket_index, value)| {
+        //         let group_values = if let Some(group_values_str) = group_values_str {
+        //             group_values_str
+        //                 .split(",")
+        //                 .map(|group| group.to_string())
+        //                 .collect::<Vec<_>>()
+        //         } else {
+        //             vec![]
+        //         };
+        //         (StatSnapshotValue::new(group_values, *bucket_index, *value))
+        //     })
+        //     .collect();
 
-        StatSnapshot::new(self.defn, values)
+        // StatSnapshot::new(self.defn, values)
     }
 }
 
