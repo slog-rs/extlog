@@ -29,13 +29,13 @@ define_stats! {
             BucketCounter,
             "Test cumulative bucket counter",
             [],
-            (CumulFreq, "bucket", [1.5, 2.5, 3.5])
+            (CumulFreq, "bucket", [10, 20, 30])
         ),
         test_group_bucket_counter(
             BucketCounter,
             "Test cumulative bucket counter with groups",
             ["group1", "group2"],
-            (CumulFreq, "bucket", [-1.5, 0])
+            (CumulFreq, "bucket", [-8, 0])
         )
     }
 }
@@ -129,9 +129,10 @@ fn request_for_single_counter() {
             stat_type: Counter,
             values: vec![ExpectedStatSnapshotValue {
                 group_values: vec![],
-                bucket_index: None,
+                bucket_limit: None,
                 value: 0f64,
             }],
+            buckets: None,
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -150,9 +151,10 @@ fn request_for_single_gauge() {
             stat_type: Gauge,
             values: vec![ExpectedStatSnapshotValue {
                 group_values: vec![],
-                bucket_index: None,
+                bucket_limit: None,
                 value: 0f64,
             }],
+            buckets: None,
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -172,9 +174,10 @@ fn request_for_multiple_metrics() {
                 stat_type: Counter,
                 values: vec![ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: None,
+                    bucket_limit: None,
                     value: 0f64,
                 }],
+                buckets: None,
             },
             ExpectedStatSnapshot {
                 name: "test_gauge",
@@ -182,9 +185,10 @@ fn request_for_multiple_metrics() {
                 stat_type: Gauge,
                 values: vec![ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: None,
+                    bucket_limit: None,
                     value: 0f64,
                 }],
+                buckets: None,
             },
         ], // LCOV_EXCL_LINE Kcov bug?
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -209,9 +213,10 @@ fn request_for_updated_metrics() {
                 stat_type: Counter,
                 values: vec![ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: None,
+                    bucket_limit: None,
                     value: 1f64,
                 }],
+                buckets: None,
             },
             ExpectedStatSnapshot {
                 name: "test_gauge",
@@ -219,9 +224,10 @@ fn request_for_updated_metrics() {
                 stat_type: Gauge,
                 values: vec![ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: None,
+                    bucket_limit: None,
                     value: 2f64,
                 }],
+                buckets: None,
             },
         ], // LCOV_EXCL_LINE Kcov bug?
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -240,6 +246,7 @@ fn request_for_single_counter_with_groups_but_no_values() {
             description: "Test grouped counter",
             stat_type: Counter,
             values: vec![],
+            buckets: None,
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -257,6 +264,7 @@ fn request_for_single_gauge_with_groups_but_no_values() {
             description: "Test grouped gauge",
             stat_type: Gauge,
             values: vec![],
+            buckets: None,
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -284,9 +292,10 @@ fn request_for_single_counter_with_groups_and_one_value() {
             stat_type: Counter,
             values: vec![ExpectedStatSnapshotValue {
                 group_values: vec!["value one".to_string(), "100".to_string()],
-                bucket_index: None,
+                bucket_limit: None,
                 value: 1f64,
-            }], // LCOV_EXCL_LINE Kcov bug?
+            }],
+            buckets: None,
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -314,9 +323,10 @@ fn request_for_single_gauge_with_groups_and_one_value() {
             stat_type: Gauge,
             values: vec![ExpectedStatSnapshotValue {
                 group_values: vec!["value two".to_string(), "200".to_string()],
-                bucket_index: None,
+                bucket_limit: None,
                 value: 2f64,
             }],
+            buckets: None,
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -354,15 +364,16 @@ fn request_for_single_counter_with_groups_and_two_values() {
             values: vec![
                 ExpectedStatSnapshotValue {
                     group_values: vec!["value one".to_string(), "100".to_string()],
-                    bucket_index: None,
+                    bucket_limit: None,
                     value: 1f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec!["value two".to_string(), "200".to_string()],
-                    bucket_index: None,
+                    bucket_limit: None,
                     value: 2f64,
                 },
             ], // LCOV_EXCL_LINE Kcov bug?
+            buckets: None,
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -382,25 +393,30 @@ fn request_for_bucket_counter_freq() {
             values: vec![
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(0),
+                    bucket_limit: Some(BucketLimit::Num(1)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(1),
+                    bucket_limit: Some(BucketLimit::Num(2)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(2),
+                    bucket_limit: Some(BucketLimit::Num(3)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(3),
+                    bucket_limit: Some(BucketLimit::Unbounded),
                     value: 0f64,
                 },
             ],
+            buckets: Some(Buckets::new(
+                BucketMethod::Freq,
+                "bucket",
+                &vec![1, 2, 3],
+            )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -414,15 +430,6 @@ fn request_for_bucket_counter_freq_one_value() {
 
     let stats = logger.get_stats();
 
-    assert_eq!(
-        stats[0].definition.buckets(),
-        Some(Buckets::new(
-            BucketMethod::Freq,
-            "bucket",
-            vec![1f64, 2f64, 3f64]
-        ))
-    );
-
     check_expected_stat_snaphots(
         &stats,
         &vec![ExpectedStatSnapshot {
@@ -432,25 +439,30 @@ fn request_for_bucket_counter_freq_one_value() {
             values: vec![
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(0),
+                    bucket_limit: Some(BucketLimit::Num(1)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(1),
+                    bucket_limit: Some(BucketLimit::Num(2)),
                     value: 1f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(2),
+                    bucket_limit: Some(BucketLimit::Num(3)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(3),
+                    bucket_limit: Some(BucketLimit::Unbounded),
                     value: 0f64,
                 },
             ],
+            buckets: Some(Buckets::new(
+                BucketMethod::Freq,
+                "bucket",
+                &vec![1, 2, 3],
+            )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -461,15 +473,6 @@ fn request_for_bucket_counter_cumul_freq() {
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
 
-    assert_eq!(
-        stats[0].definition.buckets(),
-        Some(Buckets::new(
-            BucketMethod::CumulFreq,
-            "bucket",
-            vec![1.5, 2.5, 3.5]
-        ))
-    );
-
     check_expected_stat_snaphots(
         &stats,
         &vec![ExpectedStatSnapshot {
@@ -479,25 +482,30 @@ fn request_for_bucket_counter_cumul_freq() {
             values: vec![
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(0),
+                    bucket_limit: Some(BucketLimit::Num(10)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(1),
+                    bucket_limit: Some(BucketLimit::Num(20)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(2),
+                    bucket_limit: Some(BucketLimit::Num(30)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: Some(3),
+                    bucket_limit: Some(BucketLimit::Unbounded),
                     value: 0f64,
                 },
             ],
+            buckets: Some(Buckets::new(
+                BucketMethod::CumulFreq,
+                "bucket",
+                &vec![10, 20, 30],
+            )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -528,15 +536,6 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
 
     let stats = logger.get_stats();
 
-    assert_eq!(
-        stats[0].definition.buckets(),
-        Some(Buckets::new(
-            BucketMethod::CumulFreq,
-            "bucket",
-            vec![-1.5f64, 0f64]
-        ))
-    );
-
     check_expected_stat_snaphots(
         &stats,
         &vec![ExpectedStatSnapshot {
@@ -546,35 +545,40 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
             values: vec![
                 ExpectedStatSnapshotValue {
                     group_values: vec!["one".to_string(), "two".to_string()],
-                    bucket_index: Some(0),
+                    bucket_limit: Some(BucketLimit::Num(-8)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec!["one".to_string(), "two".to_string()],
-                    bucket_index: Some(1),
+                    bucket_limit: Some(BucketLimit::Num(0)),
                     value: 0f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec!["one".to_string(), "two".to_string()],
-                    bucket_index: Some(2),
+                    bucket_limit: Some(BucketLimit::Unbounded),
                     value: 3f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec!["three".to_string(), "four".to_string()],
-                    bucket_index: Some(0),
+                    bucket_limit: Some(BucketLimit::Num(-8)),
                     value: 4f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec!["three".to_string(), "four".to_string()],
-                    bucket_index: Some(1),
+                    bucket_limit: Some(BucketLimit::Num(0)),
                     value: 4f64,
                 },
                 ExpectedStatSnapshotValue {
                     group_values: vec!["three".to_string(), "four".to_string()],
-                    bucket_index: Some(2),
+                    bucket_limit: Some(BucketLimit::Unbounded),
                     value: 4f64,
                 },
             ],
+            buckets: Some(Buckets::new(
+                BucketMethod::CumulFreq,
+                "bucket",
+                &vec![-8, 0],
+            )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -630,9 +634,10 @@ fn request_for_many_metrics() {
                 stat_type: Counter,
                 values: vec![ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: None,
+                    bucket_limit: None,
                     value: 1f64,
                 }],
+                buckets: None,
             },
             ExpectedStatSnapshot {
                 name: "test_gauge",
@@ -640,9 +645,10 @@ fn request_for_many_metrics() {
                 stat_type: Gauge,
                 values: vec![ExpectedStatSnapshotValue {
                     group_values: vec![],
-                    bucket_index: None,
+                    bucket_limit: None,
                     value: 2f64,
                 }],
+                buckets: None,
             },
             ExpectedStatSnapshot {
                 name: "test_grouped_counter",
@@ -651,15 +657,16 @@ fn request_for_many_metrics() {
                 values: vec![
                     ExpectedStatSnapshotValue {
                         group_values: vec!["value one".to_string(), "100".to_string()],
-                        bucket_index: None,
+                        bucket_limit: None,
                         value: 3f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec!["value two".to_string(), "200".to_string()],
-                        bucket_index: None,
+                        bucket_limit: None,
                         value: 4f64,
                     },
                 ], // LCOV_EXCL_LINE Kcov bug?
+                buckets: None,
             },
             ExpectedStatSnapshot {
                 name: "test_grouped_gauge",
@@ -668,15 +675,16 @@ fn request_for_many_metrics() {
                 values: vec![
                     ExpectedStatSnapshotValue {
                         group_values: vec!["value three".to_string(), "300".to_string()],
-                        bucket_index: None,
+                        bucket_limit: None,
                         value: 5f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec!["value four".to_string(), "400".to_string()],
-                        bucket_index: None,
+                        bucket_limit: None,
                         value: 6f64,
                     },
                 ], // LCOV_EXCL_LINE Kcov bug?
+                buckets: None,
             },
             ExpectedStatSnapshot {
                 name: "test_bucket_counter_freq",
@@ -685,25 +693,30 @@ fn request_for_many_metrics() {
                 values: vec![
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(0),
+                        bucket_limit: Some(BucketLimit::Num(1)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(1),
+                        bucket_limit: Some(BucketLimit::Num(2)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(2),
+                        bucket_limit: Some(BucketLimit::Num(3)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(2),
+                        bucket_limit: Some(BucketLimit::Unbounded),
                         value: 0f64,
                     },
                 ],
+                buckets: Some(Buckets::new(
+                    BucketMethod::Freq,
+                    "bucket",
+                    &vec![1, 2, 3],
+                )),
             },
             ExpectedStatSnapshot {
                 name: "test_bucket_counter_cumul_freq",
@@ -712,25 +725,30 @@ fn request_for_many_metrics() {
                 values: vec![
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(0),
+                        bucket_limit: Some(BucketLimit::Num(10)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(1),
+                        bucket_limit: Some(BucketLimit::Num(20)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(2),
+                        bucket_limit: Some(BucketLimit::Num(30)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(2),
+                        bucket_limit: Some(BucketLimit::Unbounded),
                         value: 0f64,
                     },
                 ],
+                buckets: Some(Buckets::new(
+                    BucketMethod::CumulFreq,
+                    "bucket",
+                    &vec![10, 20, 30],
+                )),
             },
             ExpectedStatSnapshot {
                 name: "test_bucket_counter_cumul_freq",
@@ -739,25 +757,30 @@ fn request_for_many_metrics() {
                 values: vec![
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(0),
+                        bucket_limit: Some(BucketLimit::Num(10)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(1),
+                        bucket_limit: Some(BucketLimit::Num(20)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(2),
+                        bucket_limit: Some(BucketLimit::Num(30)),
                         value: 0f64,
                     },
                     ExpectedStatSnapshotValue {
                         group_values: vec![],
-                        bucket_index: Some(2),
+                        bucket_limit: Some(BucketLimit::Unbounded),
                         value: 0f64,
                     },
                 ],
+                buckets: Some(Buckets::new(
+                    BucketMethod::CumulFreq,
+                    "bucket",
+                    &vec![10, 20, 30],
+                )),
             },
         ], // LCOV_EXCL_LINE Kcov bug?
     ); // LCOV_EXCL_LINE Kcov bug?

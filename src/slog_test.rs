@@ -202,13 +202,14 @@ pub struct ExpectedStatSnapshot {
     pub description: &'static str,
     pub stat_type: StatType,
     pub values: Vec<ExpectedStatSnapshotValue>,
+    pub buckets: Option<Buckets>,
 }
 
 #[derive(Debug)]
 pub struct ExpectedStatSnapshotValue {
     pub group_values: Vec<String>,
     pub value: f64,
-    pub bucket_index: Option<usize>,
+    pub bucket_limit: Option<BucketLimit>,
 }
 // LCOV_EXCL_STOP
 
@@ -225,25 +226,48 @@ pub fn check_expected_stat_snaphots(
 
         assert_eq!(found_stat.definition.stype(), stat.stat_type);
         assert_eq!(found_stat.definition.description(), stat.description);
+        assert_eq!(found_stat.definition.buckets(), stat.buckets);
 
-        for value in stat.values.iter() {
-            let found_value = found_stat.values.iter().find(|val| {
-                val.group_values == value.group_values && val.bucket_index == value.bucket_index
-            });
-            assert!(
-                found_value.is_some(),
-                "Failed to find value with groups {:?} and bucket_index {:?} for stat {}",
-                value.group_values, // LCOV_EXCL_LINE
-                value.bucket_index, // LCOV_EXCL_LINE
-                stat.name           // LCOV_EXCL_LINE
-            );
-            let found_value = found_value.unwrap();
-            assert_eq!(found_value.group_values, found_value.group_values);
-            assert_eq!(found_value.value, value.value);
-            assert_eq!(found_value.bucket_index, value.bucket_index);
+        match found_stat.values {
+            StatSnapshotValues::Counter(ref vals) | StatSnapshotValues::Gauge(ref vals) => {
+                for value in &stat.values {
+                    let found_value = vals.iter()
+                        .find(|val| val.group_values == value.group_values);
+
+                    assert!(
+                        found_value.is_some(),
+                        "Failed to find value with groups {:?} and bucket_limit {:?} for stat {}",
+                        value.group_values, // LCOV_EXCL_LINE
+                        value.bucket_limit, // LCOV_EXCL_LINE
+                        stat.name           // LCOV_EXCL_LINE
+                    );
+                    let found_value = found_value.unwrap();
+                    assert_eq!(found_value.group_values, value.group_values);
+                    assert_eq!(found_value.value, value.value);
+                }
+            }
+
+            StatSnapshotValues::BucketCounter(ref buckets, ref vals) => {
+                assert_eq!(Some(buckets), stat.buckets.as_ref());
+                for value in &stat.values {
+                    let found_value = vals.iter().find(|(val, bucket)| {
+                        val.group_values == value.group_values
+                            && Some(bucket) == value.bucket_limit.as_ref()
+                    });
+
+                    assert!(
+                        found_value.is_some(),
+                        "Failed to find value with groups {:?} and bucket_limit {:?} for stat {}",
+                        value.group_values, // LCOV_EXCL_LINE
+                        value.bucket_limit, // LCOV_EXCL_LINE
+                        stat.name           // LCOV_EXCL_LINE
+                    );
+                    let (found_value, _) = found_value.unwrap();
+                    assert_eq!(found_value.group_values, value.group_values);
+                    assert_eq!(found_value.value, value.value);
+                }
+            }
         }
-
-        assert_eq!(found_stat.values.len(), stat.values.len());
     }
 
     assert_eq!(stats.len(), expected_stats.len());

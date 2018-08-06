@@ -391,13 +391,8 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         let id = &t.id.to_string();
         let bucket = t.bucket_by.clone();
         if let Some(bucket) = bucket {
-            // let bucket_str = bucket.to_string();
             stats_buckets = quote! { #stats_buckets
                 #id => Some(self.#bucket as f64),
-            }
-        } else {
-            stats_buckets = quote! { #stats_buckets
-                #id => None,
             }
         }
     }
@@ -734,10 +729,9 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
             .map(|f| f.clone().ident.expect("No identifier for field!"))
             .collect::<Vec<_>>();
 
-        assert!(
-            bucket_by_fields.len() <= 1,
-            "The BucketBy attribute can be added to at most one field"
-        );
+        if bucket_by_fields.len() > 1 {
+            panic!("The BucketBy attribute can be added to at most one field");
+        }
 
         bucket_by_fields.into_iter().next()
     } else {
