@@ -781,7 +781,7 @@ pub enum StatSnapshotValues {
 }
 
 impl StatSnapshotValues {
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         match self {
             StatSnapshotValues::Counter(ref vals) | StatSnapshotValues::Gauge(ref vals) => {
                 vals.is_empty()
