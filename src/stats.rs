@@ -432,14 +432,12 @@ where
     ///
     /// This function is usually just called on a timer by the logger directly.
     pub fn log_all(&self, logger: &StatisticsLogger<T>) {
-
         for stat in self.stats.values() {
             // Log all the grouped and bucketed values.
             let outputs = stat.get_tagged_vals();
 
             // The `outputs` is a vector of tuples containing the (tag value, bucket_index, stat value).
             for (tag_values, val) in outputs {
-
                 // The tags require a vector of (tag name, tag value) types, so get these if present.
                 let tags = stat.get_tag_pairs(&tag_values);
 
@@ -454,7 +452,6 @@ where
                     },
                 ); // LCOV_EXCL_LINE Kcov bug?
             }
-
         }
     }
 
@@ -780,7 +777,18 @@ where
 pub enum StatSnapshotValues {
     Counter(Vec<StatSnapshotValue>),
     Gauge(Vec<StatSnapshotValue>),
-    BucketCounter(Buckets, Vec<(StatSnapshotValue, BucketLimit)>)
+    BucketCounter(Buckets, Vec<(StatSnapshotValue, BucketLimit)>),
+}
+
+impl StatSnapshotValues {
+    fn is_empty(&self) -> bool {
+        match self {
+            StatSnapshotValues::Counter(ref vals) | StatSnapshotValues::Gauge(ref vals) => {
+                vals.is_empty()
+            }
+            StatSnapshotValues::BucketCounter(_, ref vals) => vals.is_empty(),
+        }
+    }
 }
 
 /// A snapshot of the current values for a particular stat.
@@ -837,9 +845,12 @@ impl StatTypeData {
             StatType::Gauge => StatTypeData::Gauge,
             StatType::BucketCounter => {
                 let is_grouped = !defn.group_by().is_empty();
-                StatTypeData::BucketCounter(
-                    BucketCounterData::new(defn.buckets().expect("Stat definition with type BucketCounter did not contain bucket info"), is_grouped)
-                )
+                StatTypeData::BucketCounter(BucketCounterData::new(
+                    defn.buckets().expect(
+                        "Stat definition with type BucketCounter did not contain bucket info",
+                    ),
+                    is_grouped,
+                ))
             }
         }
     }
@@ -850,7 +861,11 @@ impl StatTypeData {
         }
     }
 
-    fn get_tag_pairs<'a, 'b, 'c>(&'a self, tag_values: &'b str, defn: &'c StatDefinition) -> Option<Vec<(&'static str, &'b str)>> {
+    fn get_tag_pairs<'a, 'b, 'c>(
+        &'a self,
+        tag_values: &'b str,
+        defn: &'c StatDefinition,
+    ) -> Option<Vec<(&'static str, &'b str)>> {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
             Some(bucket_counter_data.get_tag_pairs(tag_values, defn))
         } else {
@@ -908,8 +923,7 @@ impl BucketCounterData {
         if self.is_grouped {
             // update the grouped and bucketed values
 
-            let tag_values = defn
-                .group_by()
+            let tag_values = defn.group_by()
                 .iter()
                 .map(|n| trigger.tag_value(defn, n))
                 .collect::<Vec<String>>()
@@ -946,12 +960,14 @@ impl BucketCounterData {
         }
     }
 
-    fn get_tag_pairs<'a, 'b, 'c>(&'a self, tag_values: &'b str, defn: &'c StatDefinition) -> Vec<(&'static str, &'b str)> {
-        let mut tag_names = defn
-            .group_by();
+    fn get_tag_pairs<'a, 'b, 'c>(
+        &'a self,
+        tag_values: &'b str,
+        defn: &'c StatDefinition,
+    ) -> Vec<(&'static str, &'b str)> {
+        let mut tag_names = defn.group_by();
         // add the bucket label name as an additional tag name
-        tag_names
-            .push(self.buckets.label_name);
+        tag_names.push(self.buckets.label_name);
         tag_names
             .iter()
             .cloned()
@@ -974,18 +990,24 @@ impl BucketCounterData {
                 }
             }
 
-            tag_bucket_vals.into_iter().map(|(mut tag_values, index, val)| {
-                let bucket = self.buckets.get(index).expect("Invalid bucket index");
-                // add the bucket label value as an additional tag value
-                tag_values.push_str(&format!(",{}", bucket.to_string()));
-                (tag_values, val)
-            }).collect()
-
+            tag_bucket_vals
+                .into_iter()
+                .map(|(mut tag_values, index, val)| {
+                    let bucket = self.buckets.get(index).expect("Invalid bucket index");
+                    // add the bucket label value as an additional tag value
+                    tag_values.push_str(&format!(",{}", bucket.to_string()));
+                    (tag_values, val)
+                })
+                .collect()
         } else {
-            self.bucket_values.iter().enumerate().map(|(index, val)| {
-                let bucket = self.buckets.get(index).expect("Invalid bucket index");
-                (bucket.to_string(), val.as_float())
-            }).collect()
+            self.bucket_values
+                .iter()
+                .enumerate()
+                .map(|(index, val)| {
+                    let bucket = self.buckets.get(index).expect("Invalid bucket index");
+                    (bucket.to_string(), val.as_float())
+                })
+                .collect()
         }
     }
 
@@ -1004,23 +1026,28 @@ impl BucketCounterData {
                 }
             }
 
-            tag_bucket_vals.into_iter().map(|(tag_values, index, val)| {
-                let bucket = self.buckets.get(index).expect("Invalid bucket index");
-                let group_values = tag_values.split(",")
+            tag_bucket_vals
+                .into_iter()
+                .map(|(tag_values, index, val)| {
+                    let bucket = self.buckets.get(index).expect("Invalid bucket index");
+                    let group_values = tag_values
+                        .split(",")
                         .map(|group| group.to_string())
                         .collect::<Vec<_>>();
 
-                (StatSnapshotValue::new(group_values, val), bucket)
-            }).collect()
-
+                    (StatSnapshotValue::new(group_values, val), bucket)
+                })
+                .collect()
         } else {
-            self.bucket_values.iter().enumerate().map(|(index, val)| {
-                let bucket = self.buckets.get(index).expect("Invalid bucket index");
-                (StatSnapshotValue::new(vec![], val.as_float()), bucket)
-            }).collect()
+            self.bucket_values
+                .iter()
+                .enumerate()
+                .map(|(index, val)| {
+                    let bucket = self.buckets.get(index).expect("Invalid bucket index");
+                    (StatSnapshotValue::new(vec![], val.as_float()), bucket)
+                })
+                .collect()
         }
-
-
     }
 }
 
@@ -1050,14 +1077,16 @@ struct Stat {
 impl Stat {
     // Get all the tags for this stat as a vector of (name, value) tuples.
     fn get_tag_pairs<'a, 'b>(&'a self, tag_values: &'b str) -> Vec<(&'static str, &'b str)> {
-        self.stat_type_data.get_tag_pairs(tag_values, self.defn).unwrap_or_else(|| {
-            self.defn
-                .group_by()
-                .iter()
-                .cloned()
-                .zip(tag_values.split(','))
-                .collect::<Vec<_>>()
-        })
+        self.stat_type_data
+            .get_tag_pairs(tag_values, self.defn)
+            .unwrap_or_else(|| {
+                self.defn
+                    .group_by()
+                    .iter()
+                    .cloned()
+                    .zip(tag_values.split(','))
+                    .collect::<Vec<_>>()
+            })
     }
 
     /// Get all the grouped/bucketed value names currently tracked.
@@ -1080,7 +1109,6 @@ impl Stat {
 
     /// Update the stat's value(s) according to the given `StatTrigger` and `StatDefinition`.
     fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
-
         let change = trigger.change(defn).expect("Bad log definition");
         // update the stat value
         self.value.update(&change);
@@ -1123,19 +1151,15 @@ impl Stat {
 
     /// Get the current values for this stat as a StatSnapshot
     fn get_snapshot(&self) -> StatSnapshot {
-        let stat_snapshot_values : StatSnapshotValues = match self.stat_type_data {
+        let stat_snapshot_values: StatSnapshotValues = match self.stat_type_data {
             StatTypeData::BucketCounter(ref bucket_counter_data) => {
                 StatSnapshotValues::BucketCounter(
                     bucket_counter_data.buckets.clone(),
-                    bucket_counter_data.get_snapshot_values()
+                    bucket_counter_data.get_snapshot_values(),
                 )
-            },
-            StatTypeData::Counter => {
-                StatSnapshotValues::Counter(self.get_snapshot_values())
-            },
-            StatTypeData::Gauge => {
-                StatSnapshotValues::Gauge(self.get_snapshot_values())
-            },
+            }
+            StatTypeData::Counter => StatSnapshotValues::Counter(self.get_snapshot_values()),
+            StatTypeData::Gauge => StatSnapshotValues::Gauge(self.get_snapshot_values()),
         };
 
         StatSnapshot::new(self.defn, stat_snapshot_values)
@@ -1150,9 +1174,9 @@ impl Stat {
                         .split(",")
                         .map(|group| group.to_string())
                         .collect::<Vec<_>>()
-                    } else {
-                        vec![]
-                    };
+                } else {
+                    vec![]
+                };
                 (StatSnapshotValue::new(group_values, *value))
             })
             .collect()
