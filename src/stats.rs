@@ -186,7 +186,7 @@ macro_rules! define_stats {
                     $crate::stats::StatType::BucketCounter => {
                         Some($crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
                             $blabel,
-                            vec![$($blimits as i64),* ],
+                            &vec![$($blimits as i64),* ],
                         ))
                     },
                     _ => None

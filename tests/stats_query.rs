@@ -415,7 +415,7 @@ fn request_for_bucket_counter_freq() {
             buckets: Some(Buckets::new(
                 BucketMethod::Freq,
                 "bucket",
-                vec![1, 2, 3],
+                &vec![1, 2, 3],
             )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -461,7 +461,7 @@ fn request_for_bucket_counter_freq_one_value() {
             buckets: Some(Buckets::new(
                 BucketMethod::Freq,
                 "bucket",
-                vec![1, 2, 3],
+                &vec![1, 2, 3],
             )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -504,7 +504,7 @@ fn request_for_bucket_counter_cumul_freq() {
             buckets: Some(Buckets::new(
                 BucketMethod::CumulFreq,
                 "bucket",
-                vec![10, 20, 30],
+                &vec![10, 20, 30],
             )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -577,7 +577,7 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
             buckets: Some(Buckets::new(
                 BucketMethod::CumulFreq,
                 "bucket",
-                vec![-8, 0],
+                &vec![-8, 0],
             )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -715,7 +715,7 @@ fn request_for_many_metrics() {
                 buckets: Some(Buckets::new(
                     BucketMethod::Freq,
                     "bucket",
-                    vec![1, 2, 3],
+                    &vec![1, 2, 3],
                 )),
             },
             ExpectedStatSnapshot {
@@ -747,7 +747,7 @@ fn request_for_many_metrics() {
                 buckets: Some(Buckets::new(
                     BucketMethod::CumulFreq,
                     "bucket",
-                    vec![10, 20, 30],
+                    &vec![10, 20, 30],
                 )),
             },
             ExpectedStatSnapshot {
@@ -779,7 +779,7 @@ fn request_for_many_metrics() {
                 buckets: Some(Buckets::new(
                     BucketMethod::CumulFreq,
                     "bucket",
-                    vec![10, 20, 30],
+                    &vec![10, 20, 30],
                 )),
             },
         ], // LCOV_EXCL_LINE Kcov bug?
