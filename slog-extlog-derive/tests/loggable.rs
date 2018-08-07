@@ -17,8 +17,8 @@ extern crate slog_extlog_derive;
 extern crate erased_serde;
 
 use slog::Logger;
-use slog_extlog::DefaultLogger;
 use slog_extlog::slog_test;
+use slog_extlog::DefaultLogger;
 use std::str;
 
 const CRATE_LOG_NAME: &str = "SLOGTST";
