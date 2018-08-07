@@ -202,6 +202,7 @@ pub struct ExpectedStatSnapshot {
     pub description: &'static str,
     pub stat_type: StatType,
     pub values: Vec<ExpectedStatSnapshotValue>,
+    pub buckets: Option<Buckets>,
 }
 
 #[derive(Debug)]
@@ -225,12 +226,11 @@ pub fn check_expected_stat_snaphots(
 
         assert_eq!(found_stat.definition.stype(), stat.stat_type);
         assert_eq!(found_stat.definition.description(), stat.description);
+        assert_eq!(found_stat.definition.buckets(), stat.buckets);
 
         match found_stat.values {
             StatSnapshotValues::Counter(ref vals) | StatSnapshotValues::Gauge(ref vals) => {
-                // panic!();
-                //
-                for value in stat.values.iter() {
+                for value in &stat.values {
                     let found_value = vals.iter()
                         .find(|val| val.group_values == value.group_values);
 
@@ -248,7 +248,8 @@ pub fn check_expected_stat_snaphots(
             }
 
             StatSnapshotValues::BucketCounter(ref buckets, ref vals) => {
-                for value in stat.values.iter() {
+                assert_eq!(Some(buckets), stat.buckets.as_ref());
+                for value in &stat.values {
                     let found_value = vals.iter().find(|(val, bucket)| {
                         val.group_values == value.group_values
                             && Some(bucket) == value.bucket_limit.as_ref()
