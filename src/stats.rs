@@ -433,7 +433,6 @@ where
     /// This function is usually just called on a timer by the logger directly.
     pub fn log_all(&self, logger: &StatisticsLogger<T>) {
 
-
         for stat in self.stats.values() {
             // Log all the grouped and bucketed values.
             let outputs = stat.get_tagged_vals();
@@ -777,38 +776,44 @@ where
     }
 }
 
+#[derive(Debug)]
+pub enum StatSnapshotValues {
+    Counter(Vec<StatSnapshotValue>),
+    Gauge(Vec<StatSnapshotValue>),
+    BucketCounter(Buckets, Vec<(StatSnapshotValue, BucketLimit)>)
+}
+
 /// A snapshot of the current values for a particular stat.
 // LCOV_EXCL_START not interesting to track automatic derive coverage
 #[derive(Debug)]
 pub struct StatSnapshot {
     pub definition: &'static StatDefinition,
-    pub values: Vec<StatSnapshotValue>,
+    pub values: StatSnapshotValues,
 }
 // LCOV_EXCL_STOP
 
 impl StatSnapshot {
-    /// Create a new snapshot of a stat
-    pub fn new(definition: &'static StatDefinition, values: Vec<StatSnapshotValue>) -> Self {
+    /// Create a new snapshot of a stat. The StatSnapshotValues enum variant passed
+    /// should match the stat type in the definition.
+    pub fn new(definition: &'static StatDefinition, values: StatSnapshotValues) -> Self {
         StatSnapshot { definition, values }
     }
 }
 
-/// A snapshot of a current (possibly grouped and/or bucketed ) value for a stat.
+/// A snapshot of a current (possibly grouped) value for a stat.
 // LCOV_EXCL_START not interesting to track automatic derive coverage
 #[derive(Debug)]
 pub struct StatSnapshotValue {
     pub group_values: Vec<String>,
-    pub bucket_index: Option<usize>,
     pub value: f64,
 }
 // LCOV_EXCL_STOP
 
 impl StatSnapshotValue {
     /// Create a new snapshot value.
-    pub fn new(group_values: Vec<String>, bucket_index: Option<usize>, value: f64) -> Self {
+    pub fn new(group_values: Vec<String>, value: f64) -> Self {
         StatSnapshotValue {
             group_values,
-            bucket_index,
             value,
         }
     }
@@ -831,16 +836,17 @@ impl StatTypeData {
             StatType::Counter => StatTypeData::Counter,
             StatType::Gauge => StatTypeData::Gauge,
             StatType::BucketCounter => {
+                let is_grouped = !defn.group_by().is_empty();
                 StatTypeData::BucketCounter(
-                    BucketCounterData::new(defn.buckets().expect("Stat definition with type BucketCounter did not contain bucket info"))
+                    BucketCounterData::new(defn.buckets().expect("Stat definition with type BucketCounter did not contain bucket info"), is_grouped)
                 )
             }
         }
     }
 
-    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger, is_grouped: bool) {
+    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
-            bucket_counter_data.update(defn, trigger, is_grouped);
+            bucket_counter_data.update(defn, trigger);
         }
     }
 
@@ -852,9 +858,9 @@ impl StatTypeData {
         }
     }
 
-    fn get_tagged_vals(&self, is_grouped: bool) -> Option<Vec<(String, f64)>> {
+    fn get_tagged_vals(&self) -> Option<Vec<(String, f64)>> {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
-            Some(bucket_counter_data.get_tagged_vals(is_grouped))
+            Some(bucket_counter_data.get_tagged_vals())
         } else {
             None
         }
@@ -866,10 +872,11 @@ struct BucketCounterData {
     buckets: Buckets,
     bucket_values: Vec<StatValue>,
     bucket_group_values: RwLock<HashMap<String, Vec<StatValue>>>,
+    is_grouped: bool,
 }
 
 impl BucketCounterData {
-    fn new(buckets: Buckets) -> Self {
+    fn new(buckets: Buckets, is_grouped: bool) -> Self {
         let buckets_len = buckets.len();
         let mut bucket_values = Vec::new();
         bucket_values.reserve_exact(buckets_len);
@@ -881,10 +888,11 @@ impl BucketCounterData {
             buckets,
             bucket_values,
             bucket_group_values: RwLock::new(HashMap::new()),
+            is_grouped,
         }
     }
 
-    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger, is_grouped: bool) {
+    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
         let change = trigger.change(defn).expect("Bad log definition");
         // update the bucketed values
         let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
@@ -897,7 +905,7 @@ impl BucketCounterData {
                 .update(&change);
         }
 
-        if is_grouped {
+        if self.is_grouped {
             // update the grouped and bucketed values
 
             let tag_values = defn
@@ -951,13 +959,13 @@ impl BucketCounterData {
             .collect::<Vec<_>>()
     }
 
-    fn get_tagged_vals(&self, is_grouped: bool) -> Vec<(String, f64)> {
-        if is_grouped {
+    fn get_tagged_vals(&self) -> Vec<(String, f64)> {
+        if self.is_grouped {
             let mut tag_bucket_vals = Vec::new();
 
             {
                 // Only hold the read lock long enough to get the keys, bucket indices, and values.
-                let inner_vals = self.bucket_group_values.read().expect("Poisoned lock)");
+                let inner_vals = self.bucket_group_values.read().expect("Poisoned lock");
 
                 for (group_values_str, bucket_values) in inner_vals.iter() {
                     for (index, val) in bucket_values.iter().enumerate() {
@@ -979,6 +987,40 @@ impl BucketCounterData {
                 (bucket.to_string(), val.as_float())
             }).collect()
         }
+    }
+
+    fn get_snapshot_values(&self) -> Vec<(StatSnapshotValue, BucketLimit)> {
+        if self.is_grouped {
+            let mut tag_bucket_vals = Vec::new();
+
+            {
+                // Only hold the read lock long enough to get the keys, bucket indices, and values.
+                let inner_vals = self.bucket_group_values.read().expect("Poisoned lock");
+
+                for (group_values_str, bucket_values) in inner_vals.iter() {
+                    for (index, val) in bucket_values.iter().enumerate() {
+                        tag_bucket_vals.push((group_values_str.to_string(), index, val.as_float()));
+                    }
+                }
+            }
+
+            tag_bucket_vals.into_iter().map(|(tag_values, index, val)| {
+                let bucket = self.buckets.get(index).expect("Invalid bucket index");
+                let group_values = tag_values.split(",")
+                        .map(|group| group.to_string())
+                        .collect::<Vec<_>>();
+
+                (StatSnapshotValue::new(group_values, val), bucket)
+            }).collect()
+
+        } else {
+            self.bucket_values.iter().enumerate().map(|(index, val)| {
+                let bucket = self.buckets.get(index).expect("Invalid bucket index");
+                (StatSnapshotValue::new(vec![], val.as_float()), bucket)
+            }).collect()
+        }
+
+
     }
 }
 
@@ -1020,10 +1062,10 @@ impl Stat {
 
     /// Get all the grouped/bucketed value names currently tracked.
     fn get_tagged_vals(&self) -> Vec<(String, f64)> {
-        self.stat_type_data.get_tagged_vals(self.is_grouped).unwrap_or_else(|| {
+        self.stat_type_data.get_tagged_vals().unwrap_or_else(|| {
             if self.is_grouped {
                 // Only hold the read lock long enough to get the keys and values.
-                let inner_vals = self.group_values.read().expect("Poisoned lock)");
+                let inner_vals = self.group_values.read().expect("Poisoned lock");
                 inner_vals
                     .iter()
                     .map(|(group_values_str, value)| {
@@ -1076,28 +1118,44 @@ impl Stat {
         }
 
         // update type-specific stat data
-        self.stat_type_data.update(defn, trigger, self.is_grouped);
+        self.stat_type_data.update(defn, trigger);
     }
 
-    /// Get the current values for this stat as a MetricFamily
+    /// Get the current values for this stat as a StatSnapshot
     fn get_snapshot(&self) -> StatSnapshot {
-        panic!();
-        // let values = self.get_bucket_group_name_vals()
-        //     .iter()
-        //     .map(|(group_values_str, bucket_index, value)| {
-        //         let group_values = if let Some(group_values_str) = group_values_str {
-        //             group_values_str
-        //                 .split(",")
-        //                 .map(|group| group.to_string())
-        //                 .collect::<Vec<_>>()
-        //         } else {
-        //             vec![]
-        //         };
-        //         (StatSnapshotValue::new(group_values, *bucket_index, *value))
-        //     })
-        //     .collect();
+        let stat_snapshot_values : StatSnapshotValues = match self.stat_type_data {
+            StatTypeData::BucketCounter(ref bucket_counter_data) => {
+                StatSnapshotValues::BucketCounter(
+                    bucket_counter_data.buckets.clone(),
+                    bucket_counter_data.get_snapshot_values()
+                )
+            },
+            StatTypeData::Counter => {
+                StatSnapshotValues::Counter(self.get_snapshot_values())
+            },
+            StatTypeData::Gauge => {
+                StatSnapshotValues::Gauge(self.get_snapshot_values())
+            },
+        };
 
-        // StatSnapshot::new(self.defn, values)
+        StatSnapshot::new(self.defn, stat_snapshot_values)
+    }
+
+    fn get_snapshot_values(&self) -> Vec<StatSnapshotValue> {
+        self.get_tagged_vals()
+            .iter()
+            .map(|(group_values_str, value)| {
+                let group_values = if group_values_str.len() > 0 {
+                    group_values_str
+                        .split(",")
+                        .map(|group| group.to_string())
+                        .collect::<Vec<_>>()
+                    } else {
+                        vec![]
+                    };
+                (StatSnapshotValue::new(group_values, *value))
+            })
+            .collect()
     }
 }
 
