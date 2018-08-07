@@ -4,13 +4,13 @@
 //! calculated and reported based on logged events.  The logged events MUST implement the
 //! [`ExtLoggable`] trait.
 //!
-//! To support this, the [`slog-extlog-derive'] crate can be used to link logs to a specific
+//! To support this, the [`slog-extlog-derive`] crate can be used to link logs to a specific
 //! statistic.   This generates fast, compile-time checking for statistics updates at the point
 //! of logging.
 //!
 //! Users should use the [`define_stats`] macro to list their statistics.  They can then pass the
 //! list (along with stats from any dependencies) to a [`StatisticsLogger`] wrapping an
-//! [`slog:Logger`].  The statistics trigger function on the `ExtLoggable` objects then triggers
+//! [`slog::Logger`].  The statistics trigger function on the `ExtLoggable` objects then triggers
 //! statistic updates based on logged values.
 //!
 //! Library users should export the result of `define_stats!`, so that binary developers can
@@ -18,11 +18,11 @@
 //!
 //! Triggers should be added to [`ExtLoggable`] objects using the [`slog-extlog-derive`] crate.
 //!
-//! [`ExtLoggable`]: ../slog-extlog/trait.ExtLoggable.html
-//! [`define_stats`]: ./macro.define_stats.html
-//! [`Logger`]: ../slog/struct.Logger.html)
-//! [`slog`]: ../slog/index.html
-//! [`slog-extlog-derive`]: ../slog_extlog_derive/index.html
+//! [`ExtLoggable`]: ../trait.ExtLoggable.html
+//! [`define_stats`]: ../macro.define_stats.html
+//! [`slog::Logger`]: ../../slog/struct.Logger.html
+//! [`slog`]: ../../slog/index.html
+//! [`slog-extlog-derive`]: ../../slog_extlog_derive/index.html
 //! [`StatisticsLogger`]: ./struct.StatisticsLogger.html
 
 extern crate futures;
