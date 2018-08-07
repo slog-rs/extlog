@@ -122,7 +122,7 @@ pub trait StatDefinition: fmt::Debug {
 ///
 ///   - The `BucketMethod` determines how the stat will be sorted into numerical buckets and should
 ///   - be a subtype of that enum.
-///   - The bucket limits should be a list of `u64` values, each representing the upper bound of
+///   - The bucket limits should be a list of `i64` values, each representing the upper bound of
 ///     that bucket.
 ///   - The bucket label should describe what the buckets measure and should be distinct from the tags.
 ///     Each stat log will be labelled with the pair `(bucket_label, bucket_value)` in addition to the tags,
