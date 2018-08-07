@@ -274,7 +274,7 @@ pub struct Buckets {
 
 impl Buckets {
     /// Create a new Buckets instance.
-    pub fn new(method: BucketMethod, label_name: &'static str, limits: Vec<i64>) -> Buckets {
+    pub fn new(method: BucketMethod, label_name: &'static str, limits: &[i64]) -> Buckets {
         let mut limits: Vec<BucketLimit> = limits.iter().map(|f| BucketLimit::Num(*f)).collect();
         limits.push(BucketLimit::Unbounded);
         Buckets {
@@ -288,7 +288,7 @@ impl Buckets {
     pub fn assign_buckets(&self, value: f64) -> Vec<usize> {
         match self.method {
             BucketMethod::CumulFreq => {
-                let buckets = self.limits
+                self.limits
                     .iter()
                     .enumerate()
                     .filter(|(_, limit)| match limit {
@@ -296,8 +296,7 @@ impl Buckets {
                         BucketLimit::Unbounded => true,
                     })
                     .map(|(i, _)| i)
-                    .collect();
-                buckets
+                    .collect()
             }
             BucketMethod::Freq => {
                 let mut min_limit_index = self.limits.len() - 1;
@@ -316,9 +315,13 @@ impl Buckets {
     pub fn len(&self) -> usize {
         self.limits.len()
     }
+    /// Whether or not the number of buckets is greater than zero.
+    pub fn is_empty(&self) -> bool {
+        self.limits.is_empty()
+    }
     /// Get the bound of an individual bucket by index.
     pub fn get(&self, index: usize) -> Option<BucketLimit> {
-        self.limits.get(index).map(|l| *l)
+        self.limits.get(index).cloned()
     }
 }
 
@@ -920,7 +923,7 @@ impl BucketCounterData {
         &self,
         defn: &StatDefinition,
         trigger: &StatTrigger,
-        buckets_to_update: &Vec<usize>,
+        buckets_to_update: &[usize],
     ) {
         let change = trigger.change(defn).expect("Bad log definition");
         let tag_values = defn.group_by()
@@ -932,7 +935,7 @@ impl BucketCounterData {
         let found_values = {
             let inner_vals = self.bucket_group_values.read().expect("Poisoned lock");
             if let Some(tagged_bucket_vals) = inner_vals.get(&tag_values) {
-                update_bucket_values(tagged_bucket_vals, &buckets_to_update, &change);
+                update_bucket_values(tagged_bucket_vals, buckets_to_update, &change);
                 true
             } else {
                 false
@@ -1030,7 +1033,7 @@ impl BucketCounterData {
                 .map(|(tag_values, index, val)| {
                     let bucket = self.buckets.get(index).expect("Invalid bucket index");
                     let group_values = tag_values
-                        .split(",")
+                        .split(',')
                         .map(|group| group.to_string())
                         .collect::<Vec<_>>();
 
@@ -1171,9 +1174,9 @@ impl Stat {
         self.get_tagged_vals()
             .iter()
             .map(|(group_values_str, value)| {
-                let group_values = if group_values_str.len() > 0 {
+                let group_values = if !group_values_str.is_empty() {
                     group_values_str
-                        .split(",")
+                        .split(',')
                         .map(|group| group.to_string())
                         .collect::<Vec<_>>()
                 } else {
@@ -1229,8 +1232,8 @@ impl StatValue {
 }
 
 fn update_bucket_values(
-    bucket_values: &Vec<StatValue>,
-    buckets_to_update: &Vec<usize>,
+    bucket_values: &[StatValue],
+    buckets_to_update: &[usize],
     change: &ChangeType,
 ) {
     for index in buckets_to_update.iter() {
