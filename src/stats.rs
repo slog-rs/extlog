@@ -767,6 +767,7 @@ where
     }
 }
 
+/// The values contained in a `StatSnapshot` for each stat type.
 #[derive(Debug)]
 pub enum StatSnapshotValues {
     Counter(Vec<StatSnapshotValue>),
@@ -825,6 +826,8 @@ impl StatSnapshotValue {
 // Private types and private methods.
 ///////////////////////////
 
+/// A struct used to store any data internal to a stat that is specific to the
+/// stat type.
 #[derive(Debug)]
 enum StatTypeData {
     Counter,
@@ -833,6 +836,7 @@ enum StatTypeData {
 }
 
 impl StatTypeData {
+    /// Create a new `StatTypeData`
     fn new(defn: &'static StatDefinition) -> Self {
         match defn.stype() {
             StatType::Counter => StatTypeData::Counter,
@@ -849,12 +853,14 @@ impl StatTypeData {
         }
     }
 
+    /// Update the stat values
     fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
             bucket_counter_data.update(defn, trigger);
         }
     }
 
+    /// Get all the tags for this stat as a vector of `(name, value)` tuples.
     fn get_tag_pairs<'a, 'b, 'c>(
         &'a self,
         tag_values: &'b str,
@@ -867,6 +873,7 @@ impl StatTypeData {
         }
     }
 
+    /// Get all the tagged value names currently tracked.
     fn get_tagged_vals(&self) -> Option<Vec<(String, f64)>> {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
             Some(bucket_counter_data.get_tagged_vals())
@@ -876,6 +883,7 @@ impl StatTypeData {
     }
 }
 
+/// Contains data that is specific to the `BucketCounter` stat type.
 #[derive(Debug)]
 struct BucketCounterData {
     buckets: Buckets,
@@ -901,6 +909,7 @@ impl BucketCounterData {
         }
     }
 
+    /// Update the stat values.
     fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
         // Update the bucketed values.
         let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
@@ -919,6 +928,7 @@ impl BucketCounterData {
         }
     }
 
+    /// Update the grouped stat values.
     fn update_grouped(
         &self,
         defn: &StatDefinition,
@@ -962,6 +972,7 @@ impl BucketCounterData {
         }
     }
 
+    /// Get all the tags for this stat as a vector of `(name, value)` tuples.
     fn get_tag_pairs<'a, 'b, 'c>(
         &'a self,
         tag_values: &'b str,
@@ -977,6 +988,7 @@ impl BucketCounterData {
             .collect::<Vec<_>>()
     }
 
+    /// Get all the tagged values currently tracked.
     fn get_tagged_vals(&self) -> Vec<(String, f64)> {
         if self.is_grouped {
             let mut tag_bucket_vals = Vec::new();
@@ -1013,6 +1025,7 @@ impl BucketCounterData {
         }
     }
 
+    /// Get a snapshot of the current stat values.
     fn get_snapshot_values(&self) -> Vec<(StatSnapshotValue, BucketLimit)> {
         if self.is_grouped {
             let mut tag_bucket_vals = Vec::new();
@@ -1054,7 +1067,7 @@ impl BucketCounterData {
 }
 
 // LCOV_EXCL_START not interesting to track automatic derive coverage
-// The internal representation of a tracked statistic.
+/// The internal representation of a tracked statistic.
 #[derive(Debug)]
 struct Stat {
     // The definition fields, as a trait object.
@@ -1071,7 +1084,7 @@ struct Stat {
 // LCOV_EXCL_STOP
 
 impl Stat {
-    // Get all the tags for this stat as a vector of (name, value) tuples.
+    // Get all the tags for this stat as a vector of `(name, value)` tuples.
     fn get_tag_pairs<'a, 'b>(&'a self, tag_values: &'b str) -> Vec<(&'static str, &'b str)> {
         // if the stat type has its own `get_tag_pairs` method use that, otherwise
         // use the default.
@@ -1087,7 +1100,7 @@ impl Stat {
             })
     }
 
-    /// Get all the grouped/bucketed value names currently tracked.
+    /// Get all the tagged value names currently tracked.
     fn get_tagged_vals(&self) -> Vec<(String, f64)> {
         // if the stat type has its own `get_tagged_vals` method use that, otherwise
         // use the default.
@@ -1154,7 +1167,7 @@ impl Stat {
         }
     }
 
-    /// Get the current values for this stat as a StatSnapshot
+    /// Get the current values for this stat as a StatSnapshot.
     fn get_snapshot(&self) -> StatSnapshot {
         let stat_snapshot_values = match self.stat_type_data {
             StatTypeData::BucketCounter(ref bucket_counter_data) => {
@@ -1170,6 +1183,7 @@ impl Stat {
         StatSnapshot::new(self.defn, stat_snapshot_values)
     }
 
+    /// Get a snapshot of the current stat values.
     fn get_snapshot_values(&self) -> Vec<StatSnapshotValue> {
         self.get_tagged_vals()
             .iter()
