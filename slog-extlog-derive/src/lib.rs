@@ -86,7 +86,7 @@
 //! extern crate erased_serde;
 //!
 //! use slog_extlog::ExtLoggable;
-//! use slog_extlog::stats::{StatDefinition, StatDefinitionTagged};
+//! use slog_extlog::stats::StatDefinition;
 //!
 //! #[derive(Clone, Serialize, SlogValue)]
 //! enum FooRspCode {
@@ -356,7 +356,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
                 .unzip();
             let id = &t.id;
             quote! {
-               StatDefinitionTagged { defn: &#id, fixed_tags: &[#( (#keys, #vals) ),*] }
+               ::slog_extlog::stats::StatDefinitionTagged { defn: &#id, fixed_tags: &[#( (#keys, #vals) ),*] }
             }
         })
         .collect::<Vec<_>>();
@@ -454,14 +454,14 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     // Create a new identifier for the list of stats, so we can make the list globally static.
     let stat_ids_name = syn::Ident::from(format!("STATS_LIST_{}", name).to_uppercase());
 
-    let res = quote! {
+    quote! {
         static #stat_ids_name: &'static [slog_extlog::stats::StatDefinitionTagged] = &[#(#stat_ids),*];
         impl<#(#lifetimes,)* #(#tys),*> ::slog_extlog::stats::StatTrigger
             for #name<#(#lifetimes,)* #(#tys_2),*>
         #(where #tys_3: #(#bounds + )* ::slog::Value),*{
 
             fn stat_list(
-                &self) -> &'static[StatDefinitionTagged] {
+                &self) -> &'static[::slog_extlog::stats::StatDefinitionTagged] {
                 #stat_ids_name
             }
 
@@ -510,9 +510,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
                 }
             }
         }
-    };
-    // dbg!(&res);
-    res
+    }
 }
 
 fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
