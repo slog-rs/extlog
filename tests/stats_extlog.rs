@@ -115,6 +115,15 @@ struct SixthExternalLog {
     #[BucketBy(StatName = "test_bucket_counter_grouped_cumul_freq")]
     floating: f32,
 }
+
+#[derive(ExtLoggable, Clone, Serialize)]
+#[LogDetails(Id = "3", Text = "A string of text", Level = "Warning")]
+#[StatTrigger(StatName = "test_double_grouped", Action = "Incr", Value = "1", FixedGroups = "name=foobar")]
+struct FixedExternalLog {
+    #[StatGroup(StatName = "test_double_grouped")]
+    error: u8,
+}
+
 // LCOV_EXCL_STOP
 
 // Shortcut for a standard external log of the first struct with given values.
@@ -317,6 +326,55 @@ fn basic_extloggable_grouped_by_string() {
                 stat_name: "test_grouped_counter",
                 tag: Some("name=foo"),
                 value: 2f64,
+                metric_type: "counter",
+            },
+        ],
+    );
+}
+
+
+#[test]
+fn basic_extloggable_fixed_group() {
+    let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
+
+    xlog!(
+        logger,
+        FixedExternalLog {
+            error: 23,
+        }
+    );
+    xlog!(
+        logger,
+        FixedExternalLog {
+            error: 23,
+        }
+    );
+    xlog!(
+        logger,
+        FixedExternalLog {
+            error: 42,
+        }
+    );
+
+
+    // Wait for the stats logs.
+    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    let logs = get_stat_logs("test_double_grouped", &mut data);
+    assert_eq!(logs.len(), 2);
+
+    check_expected_stats(
+        &logs,
+        vec![
+            ExpectedStat {
+                stat_name: "test_double_grouped",
+                tag: Some("name=foobar,error=23"),
+                value: 2f64,
+                metric_type: "counter",
+            },
+            ExpectedStat {
+                stat_name: "test_double_grouped",
+                tag: Some("name=foobar,error=42"),
+                value: 1f64,
                 metric_type: "counter",
             },
         ],
