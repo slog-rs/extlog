@@ -246,7 +246,8 @@ pub fn slog_value(input: TokenStream) -> TokenStream {
 ///
 /// Do not call this function directly.  Use `#[derive]` instead.
 #[proc_macro_derive(
-    ExtLoggable, attributes(LogDetails, FixedFields, StatTrigger, StatGroup, BucketBy)
+    ExtLoggable,
+    attributes(LogDetails, FixedFields, StatTrigger, StatGroup, BucketBy)
 )]
 pub fn loggable(input: TokenStream) -> TokenStream {
     // Construct a string representation of the type definition
@@ -335,7 +336,8 @@ fn get_types_bounds(
 
 fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     // Get stat triggering details.
-    let triggers = ast.attrs
+    let triggers = ast
+        .attrs
         .iter()
         .filter(|a| a.name() == "StatTrigger")
         .map(|ref val| match val.value {
@@ -380,14 +382,11 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         .collect::<Vec<_>>();
 
     // Build up the tag (group) info for each stat.
-    let mut stats_groups = quote!{};
+    let mut stats_groups = quote! {};
     for t in &triggers {
         let id = &t.id.to_string();
         let fixed_group_names = t.fixed_groups.keys().cloned().collect::<Vec<_>>();
-        let fixed_group_vals = t.fixed_groups
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
+        let fixed_group_vals = t.fixed_groups.values().cloned().collect::<Vec<_>>();
         let dyn_groups = t.field_groups.clone();
         let dyn_groups_str = dyn_groups
             .clone()
@@ -404,7 +403,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     }
 
     // Build up the bucket info for each stat.
-    let mut stats_buckets = quote!{};
+    let mut stats_buckets = quote! {};
     for t in &triggers {
         let id = &t.id.to_string();
         let bucket = t.bucket_by.clone();
@@ -419,7 +418,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     let tag_name_ident = if !triggers.is_empty() {
         quote! { tag_name }
     } else {
-        quote!{ _tag_name }
+        quote! { _tag_name }
     };
 
     let name = &ast.ident;
@@ -497,7 +496,8 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     let tys_3 = tys.clone();
 
     // Get the log details from the attribute.
-    let vals = ast.attrs
+    let vals = ast
+        .attrs
         .iter()
         .filter(|a| a.name() == "LogDetails")
         .collect::<Vec<_>>();
@@ -510,7 +510,8 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     };
 
     // Get the fixed fields from the attribute.
-    let fields = ast.attrs
+    let fields = ast
+        .attrs
         .iter()
         .filter(|a| a.name() == "FixedFields")
         .flat_map(|ref val| match val.value {

@@ -287,17 +287,16 @@ impl Buckets {
     /// return a vector containing the indices of the buckets that should be updated
     pub fn assign_buckets(&self, value: f64) -> Vec<usize> {
         match self.method {
-            BucketMethod::CumulFreq => {
-                self.limits
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, limit)| match limit {
-                        BucketLimit::Num(b) => (value <= *b as f64),
-                        BucketLimit::Unbounded => true,
-                    })
-                    .map(|(i, _)| i)
-                    .collect()
-            }
+            BucketMethod::CumulFreq => self
+                .limits
+                .iter()
+                .enumerate()
+                .filter(|(_, limit)| match limit {
+                    BucketLimit::Num(b) => (value <= *b as f64),
+                    BucketLimit::Unbounded => true,
+                })
+                .map(|(i, _)| i)
+                .collect(),
             BucketMethod::Freq => {
                 let mut min_limit_index = self.limits.len() - 1;
                 for (i, limit) in self.limits.iter().enumerate() {
@@ -575,7 +574,7 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
 
 // A default `StatsDefinition` with no statistics in it.
 // Deprecated since 4.0 - just use an empty vector.
-define_stats!{ EMPTY_STATS = {} }
+define_stats! { EMPTY_STATS = {} }
 
 impl<F> Default for StatsConfig<F>
 where
@@ -936,7 +935,8 @@ impl BucketCounterData {
         buckets_to_update: &[usize],
     ) {
         let change = trigger.change(defn).expect("Bad log definition");
-        let tag_values = defn.group_by()
+        let tag_values = defn
+            .group_by()
             .iter()
             .map(|n| trigger.tag_value(defn, n))
             .collect::<Vec<String>>()
@@ -1137,7 +1137,8 @@ impl Stat {
 
     fn update_grouped(&self, defn: &StatDefinition, trigger: &StatTrigger) {
         let change = trigger.change(defn).expect("Bad log definition");
-        let tag_values = self.defn
+        let tag_values = self
+            .defn
             .group_by()
             .iter()
             .map(|n| trigger.tag_value(defn, n))

@@ -175,11 +175,8 @@ pub mod slog_test;
 /// Any generic parameters in `ExtLoggable` objects must have this as a trait bound.
 pub trait SlogValueDerivable: std::fmt::Debug + Clone + serde::Serialize + Send + 'static {}
 
-impl<T> SlogValueDerivable for T
-where
-    T: std::fmt::Debug + Clone + serde::Serialize + Send + 'static,
-{
-}
+impl<T> SlogValueDerivable for T where T: std::fmt::Debug + Clone + serde::Serialize + Send + 'static
+{}
 
 /// The default logger type.
 pub type DefaultLogger = stats::StatisticsLogger<stats::DefaultStatisticsLogFormatter>;

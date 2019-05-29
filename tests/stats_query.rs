@@ -57,7 +57,11 @@ struct GaugeUpdateLog {
 
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "3", Text = "Amount sent", Level = "Info")]
-#[StatTrigger(StatName = "test_grouped_counter", Action = "Incr", ValueFrom = "self.delta")]
+#[StatTrigger(
+    StatName = "test_grouped_counter",
+    Action = "Incr",
+    ValueFrom = "self.delta"
+)]
 struct GroupedCounterUpdateLog {
     delta: i32,
     #[StatGroup(StatName = "test_grouped_counter")]
@@ -68,7 +72,11 @@ struct GroupedCounterUpdateLog {
 
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "4", Text = "Amount sent", Level = "Info")]
-#[StatTrigger(StatName = "test_grouped_gauge", Action = "Incr", ValueFrom = "self.delta")]
+#[StatTrigger(
+    StatName = "test_grouped_gauge",
+    Action = "Incr",
+    ValueFrom = "self.delta"
+)]
 struct GroupedGaugeUpdateLog {
     delta: i32,
     #[StatGroup(StatName = "test_grouped_gauge")]
@@ -86,16 +94,32 @@ struct BucketCounterLog {
 }
 
 #[derive(ExtLoggable, Clone, Serialize)]
-#[LogDetails(Id = "5", Text = "cumulative test bucket counter stat log", Level = "Info")]
-#[StatTrigger(StatName = "test_bucket_counter_cumul_freq", Action = "Incr", Value = "2")]
+#[LogDetails(
+    Id = "5",
+    Text = "cumulative test bucket counter stat log",
+    Level = "Info"
+)]
+#[StatTrigger(
+    StatName = "test_bucket_counter_cumul_freq",
+    Action = "Incr",
+    Value = "2"
+)]
 struct CumulBucketCounterLog {
     #[BucketBy(StatName = "test_bucket_counter_cumul_freq")]
     bucket_value: f32,
 }
 
 #[derive(ExtLoggable, Clone, Serialize)]
-#[LogDetails(Id = "6", Text = "test grouped bucket counter stat log", Level = "Info")]
-#[StatTrigger(StatName = "test_group_bucket_counter", Action = "Incr", ValueFrom = "self.delta")]
+#[LogDetails(
+    Id = "6",
+    Text = "test grouped bucket counter stat log",
+    Level = "Info"
+)]
+#[StatTrigger(
+    StatName = "test_group_bucket_counter",
+    Action = "Incr",
+    ValueFrom = "self.delta"
+)]
 struct GroupBucketCounterLog {
     delta: i32,
     #[StatGroup(StatName = "test_group_bucket_counter")]
@@ -412,11 +436,7 @@ fn request_for_bucket_counter_freq() {
                     value: 0f64,
                 },
             ],
-            buckets: Some(Buckets::new(
-                BucketMethod::Freq,
-                "bucket",
-                &vec![1, 2, 3],
-            )),
+            buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &vec![1, 2, 3])),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -458,11 +478,7 @@ fn request_for_bucket_counter_freq_one_value() {
                     value: 0f64,
                 },
             ],
-            buckets: Some(Buckets::new(
-                BucketMethod::Freq,
-                "bucket",
-                &vec![1, 2, 3],
-            )),
+            buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &vec![1, 2, 3])),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -712,11 +728,7 @@ fn request_for_many_metrics() {
                         value: 0f64,
                     },
                 ],
-                buckets: Some(Buckets::new(
-                    BucketMethod::Freq,
-                    "bucket",
-                    &vec![1, 2, 3],
-                )),
+                buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &vec![1, 2, 3])),
             },
             ExpectedStatSnapshot {
                 name: "test_bucket_counter_cumul_freq",

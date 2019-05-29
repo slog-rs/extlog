@@ -231,7 +231,8 @@ pub fn check_expected_stat_snaphots(
         match found_stat.values {
             StatSnapshotValues::Counter(ref vals) | StatSnapshotValues::Gauge(ref vals) => {
                 for value in &stat.values {
-                    let found_value = vals.iter()
+                    let found_value = vals
+                        .iter()
                         .find(|val| val.group_values == value.group_values);
 
                     assert!(

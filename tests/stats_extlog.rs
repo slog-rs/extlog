@@ -39,7 +39,10 @@ define_stats! {
 #[StatTrigger(StatName = "test_counter", Action = "Incr", Value = "1")]
 #[StatTrigger(StatName = "test_second_counter", Action = "Incr", Value = "1")]
 #[StatTrigger(
-    StatName = "test_gauge", Condition = "self.bytes < 200", Action = "Incr", Value = "1"
+    StatName = "test_gauge",
+    Condition = "self.bytes < 200",
+    Action = "Incr",
+    Value = "1"
 )]
 #[StatTrigger(
     StatName = "test_second_gauge",
@@ -56,7 +59,10 @@ struct ExternalLog {
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "2", Text = "Some floating point number", Level = "Error")]
 #[StatTrigger(
-    StatName = "test_gauge", Condition = "self.floating > 1.0", Action = "Decr", Value = "1"
+    StatName = "test_gauge",
+    Condition = "self.floating > 1.0",
+    Action = "Decr",
+    Value = "1"
 )]
 struct SecondExternalLog {
     floating: f32,
@@ -65,7 +71,10 @@ struct SecondExternalLog {
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "3", Text = "A string of text", Level = "Warning")]
 #[StatTrigger(
-    StatName = "test_foo_count", Condition = "self.name == \"foo\"", Action = "Incr", Value = "1"
+    StatName = "test_foo_count",
+    Condition = "self.name == \"foo\"",
+    Action = "Incr",
+    Value = "1"
 )]
 #[StatTrigger(StatName = "test_grouped_counter", Action = "Incr", Value = "1")]
 struct ThirdExternalLog {
@@ -93,7 +102,11 @@ struct FourthExternalLog {
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "5", Text = "Some floating point number", Level = "Error")]
 #[StatTrigger(StatName = "test_bucket_counter_freq", Action = "Incr", Value = "1")]
-#[StatTrigger(StatName = "test_bucket_counter_cumul_freq", Action = "Incr", Value = "1")]
+#[StatTrigger(
+    StatName = "test_bucket_counter_cumul_freq",
+    Action = "Incr",
+    Value = "1"
+)]
 struct FifthExternalLog {
     #[BucketBy(StatName = "test_bucket_counter_freq")]
     #[BucketBy(StatName = "test_bucket_counter_cumul_freq")]
@@ -101,9 +114,21 @@ struct FifthExternalLog {
 }
 
 #[derive(ExtLoggable, Clone, Serialize)]
-#[LogDetails(Id = "6", Text = "Some floating point number with name and error", Level = "Error")]
-#[StatTrigger(StatName = "test_bucket_counter_grouped_freq", Action = "Incr", Value = "1")]
-#[StatTrigger(StatName = "test_bucket_counter_grouped_cumul_freq", Action = "Incr", Value = "1")]
+#[LogDetails(
+    Id = "6",
+    Text = "Some floating point number with name and error",
+    Level = "Error"
+)]
+#[StatTrigger(
+    StatName = "test_bucket_counter_grouped_freq",
+    Action = "Incr",
+    Value = "1"
+)]
+#[StatTrigger(
+    StatName = "test_bucket_counter_grouped_cumul_freq",
+    Action = "Incr",
+    Value = "1"
+)]
 struct SixthExternalLog {
     #[StatGroup(StatName = "test_bucket_counter_grouped_freq")]
     #[StatGroup(StatName = "test_bucket_counter_grouped_cumul_freq")]
@@ -118,7 +143,12 @@ struct SixthExternalLog {
 
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(Id = "3", Text = "A string of text", Level = "Warning")]
-#[StatTrigger(StatName = "test_double_grouped", Action = "Incr", Value = "1", FixedGroups = "name=foobar")]
+#[StatTrigger(
+    StatName = "test_double_grouped",
+    Action = "Incr",
+    Value = "1",
+    FixedGroups = "name=foobar"
+)]
 struct FixedExternalLog {
     #[StatGroup(StatName = "test_double_grouped")]
     error: u8,
@@ -332,30 +362,13 @@ fn basic_extloggable_grouped_by_string() {
     );
 }
 
-
 #[test]
 fn basic_extloggable_fixed_group() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
-    xlog!(
-        logger,
-        FixedExternalLog {
-            error: 23,
-        }
-    );
-    xlog!(
-        logger,
-        FixedExternalLog {
-            error: 23,
-        }
-    );
-    xlog!(
-        logger,
-        FixedExternalLog {
-            error: 42,
-        }
-    );
-
+    xlog!(logger, FixedExternalLog { error: 23 });
+    xlog!(logger, FixedExternalLog { error: 23 });
+    xlog!(logger, FixedExternalLog { error: 42 });
 
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
