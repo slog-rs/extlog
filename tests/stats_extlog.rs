@@ -146,7 +146,7 @@ struct SixthExternalLog {
 #[StatTrigger(
     StatName = "test_double_grouped",
     Action = "Incr",
-    Value = "1",
+    Value = "3",
     FixedGroups = "name=foo"
 )]
 #[StatTrigger(
@@ -387,13 +387,13 @@ fn basic_extloggable_fixed_group() {
             ExpectedStat {
                 stat_name: "test_double_grouped",
                 tag: Some("name=foo,error=23"),
-                value: 2f64,
+                value: 6f64,
                 metric_type: "counter",
             },
             ExpectedStat {
                 stat_name: "test_double_grouped",
                 tag: Some("name=foo,error=42"),
-                value: 1f64,
+                value: 3f64,
                 metric_type: "counter",
             },
             ExpectedStat {

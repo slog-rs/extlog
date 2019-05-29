@@ -86,7 +86,7 @@
 //! extern crate erased_serde;
 //!
 //! use slog_extlog::ExtLoggable;
-//! use slog_extlog::stats::StatDefinition;
+//! use slog_extlog::stats::{StatDefinition, StatDefinitionTagged};
 //!
 //! #[derive(Clone, Serialize, SlogValue)]
 //! enum FooRspCode {
@@ -346,8 +346,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         })
         .collect::<Vec<_>>();
 
-    let stat_ids = triggers.iter().map(|t| &t.id).collect::<Vec<_>>();
-    let fixed_tag_pairs = triggers
+    let stat_ids = triggers
         .iter()
         .map(|t| {
             let (keys, vals): (Vec<_>, Vec<_>) = t
@@ -355,23 +354,35 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .unzip();
+            let id = &t.id;
             quote! {
-               &[#( (#keys, #vals) ),*]
+               StatDefinitionTagged { defn: &#id, fixed_tags: &[#( (#keys, #vals) ),*] }
             }
         })
         .collect::<Vec<_>>();
 
-    let stat_ids2 = stat_ids
+    let stat_ids_cond = triggers
         .iter()
-        .cloned()
-        .map(|t| t.to_string())
+        .map(|t| {
+            let (keys, vals): (Vec<_>, Vec<_>) = t
+                .fixed_groups
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .unzip();
+            let id = t.id.to_string();
+            // The horrific chicanery here is because match guards can;t use mutable borrows, so
+            // `any` and `find` and such methods can't be used.
+            quote! {
+                #id if (true #(&& stat_id.fixed_tags.iter().filter(|tag| tag.0 == #keys && tag.1 == #vals).count() != 0) *)
+            }
+        })
         .collect::<Vec<_>>();
-    let stat_ids3 = stat_ids2.clone();
     let stat_conds = triggers
         .iter()
         .map(|ref t| &t.condition_body)
         .collect::<Vec<_>>();
 
+    let stat_ids_change = stat_ids_cond.clone();
     // Write out any stats triggering code.
     let stat_changes = triggers
         .iter()
@@ -443,10 +454,8 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     // Create a new identifier for the list of stats, so we can make the list globally static.
     let stat_ids_name = syn::Ident::from(format!("STATS_LIST_{}", name).to_uppercase());
 
-    quote! {
-        static #stat_ids_name: &'static [slog_extlog::stats::StatDefinitionTagged] = &[
-                #(StatDefinitionTagged { defn: &#stat_ids, fixed_tags: #fixed_tag_pairs } ),*
-            ];
+    let res = quote! {
+        static #stat_ids_name: &'static [slog_extlog::stats::StatDefinitionTagged] = &[#(#stat_ids),*];
         impl<#(#lifetimes,)* #(#tys),*> ::slog_extlog::stats::StatTrigger
             for #name<#(#lifetimes,)* #(#tys_2),*>
         #(where #tys_3: #(#bounds + )* ::slog::Value),*{
@@ -460,7 +469,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
             /// Panic in the case when we get called for an unknown stat.
             fn condition(&self, stat_id: &::slog_extlog::stats::StatDefinitionTagged) -> bool {
                 match stat_id.defn.name() {
-                    #(#stat_ids2 => #stat_conds,)*
+                    #(#stat_ids_cond => #stat_conds,)*
                     s => panic!("Condition requested for unknown stat {}", s)
                 }
 
@@ -470,7 +479,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
                       stat_id: &::slog_extlog::stats::StatDefinitionTagged) ->
                       Option<::slog_extlog::stats::ChangeType> {
                 match stat_id.defn.name() {
-                    #(#stat_ids3 => #stat_changes,)*
+                    #(#stat_ids_change => #stat_changes,)*
                     s => panic!("Change requested for unknown stat {}", s)
                 }
             }
@@ -501,7 +510,9 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
                 }
             }
         }
-    }
+    };
+    // dbg!(&res);
+    res
 }
 
 fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
