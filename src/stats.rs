@@ -196,23 +196,31 @@ macro_rules! define_stats {
     };
 }
 
-/// A trait indicating that this statistic can be used to trigger a statistics change.
+/// A stat definition, possibly filtered with some specific tag values.
+pub struct StatDefinitionTagged {
+    /// The statistic definition
+    pub defn: &'static (StatDefinition + Sync),
+    /// THe fixed tag values.  The keys *must* match keys in `defn`.
+    pub fixed_tags: &'static [(&'static str, &'static str)],
+}
+
+/// A trait indicating that this log can be used to trigger a statistics change.
 pub trait StatTrigger {
     /// The list of stats that this trigger applies to.
-    fn stat_list(&self) -> &'static [&'static (StatDefinition + Sync)];
+    fn stat_list(&self) -> &[StatDefinitionTagged];
     /// The condition that must be satisfied for this stat to change
-    fn condition(&self, _stat_id: &StatDefinition) -> bool {
+    fn condition(&self, _stat_id: &StatDefinitionTagged) -> bool {
         false
     }
     /// Get the associated tag value for this log.
     /// The value must be convertable to a string so it can be stored internally.
-    fn tag_value(&self, stat_id: &StatDefinition, _tag_name: &'static str) -> String;
+    fn tag_value(&self, stat_id: &StatDefinitionTagged, _tag_name: &'static str) -> String;
     /// The details of the change to make for this stat, if `condition` returned true.
-    fn change(&self, _stat_id: &StatDefinition) -> Option<ChangeType> {
+    fn change(&self, _stat_id: &StatDefinitionTagged) -> Option<ChangeType> {
         None
     }
     /// The value to be used to sort the statistic into the correct bucket(s).
-    fn bucket_value(&self, _stat_id: &StatDefinition) -> Option<f64> {
+    fn bucket_value(&self, _stat_id: &StatDefinitionTagged) -> Option<f64> {
         None
     }
 }
@@ -407,16 +415,17 @@ where
     /// This checks for any configured stats that are triggered by this log, and
     /// updates their value appropriately.
     fn update_stats(&self, log: &StatTrigger) {
-        for defn in log.stat_list() {
-            if log.condition(*defn) {
-                let stat = &self.stats.get(defn.name()).unwrap_or_else(|| {
+        for stat_def in log.stat_list() {
+            if log.condition(stat_def) {
+                let stat = &self.stats.get(stat_def.defn.name()).unwrap_or_else(|| {
                     panic!(
                         "No statistic found with name {}, did you try writing a log through a
                          logger which wasn't initialized with your stats definitions?",
-                        defn.name()
+                        stat_def.defn.name()
                     )
                 });
-                stat.update(*defn, log)
+
+                stat.update(stat_def, log)
             }
         }
     }
@@ -853,7 +862,7 @@ impl StatTypeData {
     }
 
     /// Update the stat values
-    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
+    fn update(&self, defn: &StatDefinitionTagged, trigger: &StatTrigger) {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
             bucket_counter_data.update(defn, trigger);
         }
@@ -909,7 +918,7 @@ impl BucketCounterData {
     }
 
     /// Update the stat values.
-    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
+    fn update(&self, defn: &StatDefinitionTagged, trigger: &StatTrigger) {
         // Update the bucketed values.
         let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
         let buckets_to_update = self.buckets.assign_buckets(bucket_value);
@@ -930,12 +939,13 @@ impl BucketCounterData {
     /// Update the grouped stat values.
     fn update_grouped(
         &self,
-        defn: &StatDefinition,
+        defn: &StatDefinitionTagged,
         trigger: &StatTrigger,
         buckets_to_update: &[usize],
     ) {
         let change = trigger.change(defn).expect("Bad log definition");
         let tag_values = defn
+            .defn
             .group_by()
             .iter()
             .map(|n| trigger.tag_value(defn, n))
@@ -1121,7 +1131,7 @@ impl Stat {
     }
 
     /// Update the stat's value(s) according to the given `StatTrigger` and `StatDefinition`.
-    fn update(&self, defn: &StatDefinition, trigger: &StatTrigger) {
+    fn update(&self, defn: &StatDefinitionTagged, trigger: &StatTrigger) {
         // update the stat value
         self.value
             .update(&trigger.change(defn).expect("Bad log definition"));
@@ -1135,8 +1145,9 @@ impl Stat {
         self.stat_type_data.update(defn, trigger);
     }
 
-    fn update_grouped(&self, defn: &StatDefinition, trigger: &StatTrigger) {
+    fn update_grouped(&self, defn: &StatDefinitionTagged, trigger: &StatTrigger) {
         let change = trigger.change(defn).expect("Bad log definition");
+
         let tag_values = self
             .defn
             .group_by()

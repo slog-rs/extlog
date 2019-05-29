@@ -147,7 +147,13 @@ struct SixthExternalLog {
     StatName = "test_double_grouped",
     Action = "Incr",
     Value = "1",
-    FixedGroups = "name=foobar"
+    FixedGroups = "name=foo"
+)]
+#[StatTrigger(
+    StatName = "test_double_grouped",
+    Action = "Incr",
+    Value = "1",
+    FixedGroups = "name=bar"
 )]
 struct FixedExternalLog {
     #[StatGroup(StatName = "test_double_grouped")]
@@ -373,20 +379,32 @@ fn basic_extloggable_fixed_group() {
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
     let logs = get_stat_logs("test_double_grouped", &mut data);
-    assert_eq!(logs.len(), 2);
+    assert_eq!(logs.len(), 4);
 
     check_expected_stats(
         &logs,
         vec![
             ExpectedStat {
                 stat_name: "test_double_grouped",
-                tag: Some("name=foobar,error=23"),
+                tag: Some("name=foo,error=23"),
                 value: 2f64,
                 metric_type: "counter",
             },
             ExpectedStat {
                 stat_name: "test_double_grouped",
-                tag: Some("name=foobar,error=42"),
+                tag: Some("name=foo,error=42"),
+                value: 1f64,
+                metric_type: "counter",
+            },
+            ExpectedStat {
+                stat_name: "test_double_grouped",
+                tag: Some("name=bar,error=23"),
+                value: 2f64,
+                metric_type: "counter",
+            },
+            ExpectedStat {
+                stat_name: "test_double_grouped",
+                tag: Some("name=bar,error=42"),
                 value: 1f64,
                 metric_type: "counter",
             },

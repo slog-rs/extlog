@@ -347,6 +347,20 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         .collect::<Vec<_>>();
 
     let stat_ids = triggers.iter().map(|t| &t.id).collect::<Vec<_>>();
+    let fixed_tag_pairs = triggers
+        .iter()
+        .map(|t| {
+            let (keys, vals): (Vec<_>, Vec<_>) = t
+                .fixed_groups
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .unzip();
+            quote! {
+               &[#( (#keys, #vals) ),*]
+            }
+        })
+        .collect::<Vec<_>>();
+
     let stat_ids2 = stat_ids
         .iter()
         .cloned()
@@ -385,8 +399,6 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     let mut stats_groups = quote! {};
     for t in &triggers {
         let id = &t.id.to_string();
-        let fixed_group_names = t.fixed_groups.keys().cloned().collect::<Vec<_>>();
-        let fixed_group_vals = t.fixed_groups.values().cloned().collect::<Vec<_>>();
         let dyn_groups = t.field_groups.clone();
         let dyn_groups_str = dyn_groups
             .clone()
@@ -396,7 +408,6 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         stats_groups = quote! { #stats_groups
             #id => { match tag_name {
               #(#dyn_groups_str => self.#dyn_groups.to_string(),)*
-              #(#fixed_group_names => #fixed_group_vals.to_string(),)*
                 _ => "".to_string() }
             },
         }
@@ -433,22 +444,22 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     let stat_ids_name = syn::Ident::from(format!("STATS_LIST_{}", name).to_uppercase());
 
     quote! {
-        static #stat_ids_name: &'static[
-            &'static (::slog_extlog::stats::StatDefinition + Sync)] = &[#(&#stat_ids),*];
+        static #stat_ids_name: &'static [slog_extlog::stats::StatDefinitionTagged] = &[
+                #(StatDefinitionTagged { defn: &#stat_ids, fixed_tags: #fixed_tag_pairs } ),*
+            ];
         impl<#(#lifetimes,)* #(#tys),*> ::slog_extlog::stats::StatTrigger
             for #name<#(#lifetimes,)* #(#tys_2),*>
         #(where #tys_3: #(#bounds + )* ::slog::Value),*{
 
             fn stat_list(
-                &self) -> &'static[&'static (::slog_extlog::stats::StatDefinition + Sync)] {
+                &self) -> &'static[StatDefinitionTagged] {
                 #stat_ids_name
             }
 
-
             /// The condition that must be satisfied for this stat to change.
             /// Panic in the case when we get called for an unknown stat.
-            fn condition(&self, stat_id: &::slog_extlog::stats::StatDefinition) -> bool {
-                match stat_id.name() {
+            fn condition(&self, stat_id: &::slog_extlog::stats::StatDefinitionTagged) -> bool {
+                match stat_id.defn.name() {
                     #(#stat_ids2 => #stat_conds,)*
                     s => panic!("Condition requested for unknown stat {}", s)
                 }
@@ -456,9 +467,9 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
             }
             /// The details of the change to make for this stat, if `condition` returned true.
             fn change(&self,
-                      stat_id: &::slog_extlog::stats::StatDefinition) ->
+                      stat_id: &::slog_extlog::stats::StatDefinitionTagged) ->
                       Option<::slog_extlog::stats::ChangeType> {
-                match stat_id.name() {
+                match stat_id.defn.name() {
                     #(#stat_ids3 => #stat_changes,)*
                     s => panic!("Change requested for unknown stat {}", s)
                 }
@@ -466,18 +477,25 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
 
             /// The fields that provide the grouped values for this stat
             fn tag_value(&self,
-                         stat_id: &::slog_extlog::stats::StatDefinition,
+                         stat_id: &::slog_extlog::stats::StatDefinitionTagged,
                          #tag_name_ident: &'static str) -> String {
-                match stat_id.name() {
-                    #stats_groups
-                    _ => "".to_string(),
+
+                // If this tag is in the fixed list, use the value provided.
+                // Otherwise, call out to the trigger's value.
+                if let Some(v) = stat_id.fixed_tags.iter().find(|name| #tag_name_ident == name.0) {
+                    v.1.to_string()
+                } else {
+                    match stat_id.defn.name() {
+                        #stats_groups
+                        _ => "".to_string(),
+                    }
                 }
             }
 
             /// The value to be used to sort the stat into buckets
             fn bucket_value(&self,
-                         stat_id: &::slog_extlog::stats::StatDefinition) -> Option<f64> {
-                match stat_id.name() {
+                         stat_id: &::slog_extlog::stats::StatDefinitionTagged) -> Option<f64> {
+                match stat_id.defn.name() {
                     # stats_buckets
                     _ => None,
                 }
