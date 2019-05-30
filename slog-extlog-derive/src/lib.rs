@@ -346,6 +346,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         })
         .collect::<Vec<_>>();
 
+    // Build up the return value for the `stat_list` method.
     let stat_ids = triggers
         .iter()
         .map(|t| {
@@ -361,6 +362,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         })
         .collect::<Vec<_>>();
 
+    // Build up the input match statements value for the `condition` method.
     let stat_ids_cond = triggers
         .iter()
         .map(|t| {
@@ -370,20 +372,24 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
                 .map(|(k, v)| (k.to_string(), v.to_string()))
                 .unzip();
             let id = t.id.to_string();
-            // The horrific chicanery here is because match guards can;t use mutable borrows, so
+            // The horrific chicanery here is because match guards can't use mutable borrows, so
             // `any` and `find` and such methods can't be used.
             quote! {
                 #id if (true #(&& stat_id.fixed_tags.iter().filter(|tag| tag.0 == #keys && tag.1 == #vals).count() != 0) *)
             }
         })
         .collect::<Vec<_>>();
+
+    // Build up the return values for those match statements.
     let stat_conds = triggers
         .iter()
         .map(|ref t| &t.condition_body)
         .collect::<Vec<_>>();
 
+    // Build up the input match statements value for the `change` method.
     let stat_ids_change = stat_ids_cond.clone();
-    // Write out any stats triggering code.
+
+    // Build up the return values for those match statements.
     let stat_changes = triggers
         .iter()
         .map(|t| {

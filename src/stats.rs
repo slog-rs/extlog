@@ -309,7 +309,7 @@ impl Buckets {
                 let mut min_limit_index = self.limits.len() - 1;
                 for (i, limit) in self.limits.iter().enumerate() {
                     if let BucketLimit::Num(b) = limit {
-                        if value <= *b as f64 && limit <= &self.limits[min_limit_index] {
+                        if value <= *b as f64 && *limit <= self.limits[min_limit_index] {
                             min_limit_index = i
                         }
                     }
@@ -385,16 +385,25 @@ pub struct StatsTracker<T: StatisticsLogFormatter> {
 }
 // LCOV_EXCL_STOP
 
+impl<T> Default for StatsTracker<T>
+where
+    T: StatisticsLogFormatter,
+{
+    fn default() -> Self {
+        StatsTracker {
+            stats: HashMap::new(),
+            stat_formatter: PhantomData,
+        }
+    }
+}
+
 impl<T> StatsTracker<T>
 where
     T: StatisticsLogFormatter,
 {
     /// Create a new tracker with the given formatter.
     pub fn new() -> Self {
-        StatsTracker {
-            stats: HashMap::new(),
-            stat_formatter: PhantomData,
-        } // LCOV_EXCL_LINE Kcov bug?
+        Default::default()
     }
 
     /// Add a new statistic to this tracker.
@@ -537,6 +546,17 @@ where
 /// ```
 pub struct StatsConfigBuilder<T: StatisticsLogFormatter> {
     cfg: StatsConfig<T>,
+}
+
+impl<T> Default for StatsConfigBuilder<T>
+where
+    T: StatisticsLogFormatter,
+{
+    fn default() -> Self {
+        StatsConfigBuilder {
+            cfg: Default::default(),
+        }
+    }
 }
 
 impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {

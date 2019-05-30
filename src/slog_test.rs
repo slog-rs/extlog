@@ -51,6 +51,7 @@
 //! For verifying statistics, the `create_logger_buffer` and `check_expected_stats` methods
 //! are useful for creating a `slog_extlog::StatisticsLogger` and then verifying that statistics
 //! are generated as expected.
+#![allow(clippy::float_cmp)]
 pub extern crate erased_serde;
 pub extern crate iobuffer;
 pub extern crate serde_json;
