@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Changed
 ### Added
+- Add the `FixedGroups` attribute to `StatTrigger`, allowing for a compile-time constant value on
+a metric.
 
 ## [5.0.0]
 ### Changed

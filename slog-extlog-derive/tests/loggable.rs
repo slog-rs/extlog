@@ -67,7 +67,11 @@ fn test_derived_structs() {
     }
 
     #[derive(Debug, Clone, Serialize, ExtLoggable)]
-    #[LogDetails(Id = "456", Text = "Received a foo response from server", Level = "Info")]
+    #[LogDetails(
+        Id = "456",
+        Text = "Received a foo response from server",
+        Level = "Info"
+    )]
     struct FooRspRcvd(FooRspType, &'static str);
     // LCOV_EXCL_STOP
 

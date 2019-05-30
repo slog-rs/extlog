@@ -46,14 +46,24 @@
 //!   - `Condition` (optional) - A condition, absed on the log fields, for this stat to be changed.
 //!      if not set, the stat is changed on every log.  The value of this parameter is an
 //!        expression that returns a Boolean, and can use `self` for the current log object.
-//!   - `Value` or `ValueFrom` - - The value to increment/decrement/set.  One and only one
+//!   - `Value` or `ValueFrom` - The value to increment/decrement/set.  One and only one
 //!   of these must be provided.  `Value` for a fixed number, `ValueFrom` for an arbitrary
 //!   expression to find the value that may return self.
+//!   - `FixedGroups (optional)` - A comma-separated list of fixed tags to add to this statistic
+//!   for this trigger - see below.
 //!
 //! ### Grouped (tagged) statistics)
-//! Some statistics may be grouped with *tags*.  To specify which field within the triggering log
-//! should be used for the group value, add a `#[StatGroup(StatName = "<name>")] attribute, where
-//! `<id>` is the relevant statistic name.
+//! Some statistics may be grouped with *tags*.  Tags can be defined in two ways.
+//!
+//!  - To add one or more *fixed* groups on a given statistic update, add an attribute to the
+//!    `StatTrigger` of the form:  `FixedGroups = "<name>=<value>,<name2>=<value2>,...".
+//!    The names must be the names of the tags within the statistic definition.
+//!  - To add a *dynamic* tag, you can take the value from a single field in the log. To specify
+//!    which field within the triggering log should be used for the group value, add a
+//!    `#[StatGroup(StatName = "<name>")] attribute on the relevant field within the log, where
+//!    `<name>` is the relevant statistic name.
+//!    The name of the group within the statistic definition *must* be the name of the field
+//!    in the log structure.
 //!
 //! **WARNING** - be careful with tagging where there can be large numbers of values - each seen
 //! value for the tag generates a new statistic, which is tracked forever once it is seen.
@@ -174,6 +184,7 @@ extern crate syn;
 
 use proc_macro::TokenStream;
 use slog::Level;
+use std::collections::HashMap;
 use std::str::FromStr;
 
 enum StatTriggerAction {
@@ -208,7 +219,8 @@ struct StatTriggerData {
     condition_body: syn::Expr,
     action: StatTriggerAction,
     val: StatTriggerValue,
-    group_by: Vec<syn::Ident>,
+    fixed_groups: HashMap<String, String>,
+    field_groups: Vec<syn::Ident>,
     bucket_by: Option<syn::Ident>,
 }
 
@@ -234,7 +246,8 @@ pub fn slog_value(input: TokenStream) -> TokenStream {
 ///
 /// Do not call this function directly.  Use `#[derive]` instead.
 #[proc_macro_derive(
-    ExtLoggable, attributes(LogDetails, FixedFields, StatTrigger, StatGroup, BucketBy)
+    ExtLoggable,
+    attributes(LogDetails, FixedFields, StatTrigger, StatGroup, BucketBy)
 )]
 pub fn loggable(input: TokenStream) -> TokenStream {
     // Construct a string representation of the type definition
@@ -323,7 +336,8 @@ fn get_types_bounds(
 
 fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     // Get stat triggering details.
-    let triggers = ast.attrs
+    let triggers = ast
+        .attrs
         .iter()
         .filter(|a| a.name() == "StatTrigger")
         .map(|ref val| match val.value {
@@ -332,19 +346,50 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         })
         .collect::<Vec<_>>();
 
-    let stat_ids = triggers.iter().map(|t| &t.id).collect::<Vec<_>>();
-    let stat_ids2 = stat_ids
+    // Build up the return value for the `stat_list` method.
+    let stat_ids = triggers
         .iter()
-        .cloned()
-        .map(|t| t.to_string())
+        .map(|t| {
+            let (keys, vals): (Vec<_>, Vec<_>) = t
+                .fixed_groups
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .unzip();
+            let id = &t.id;
+            quote! {
+               ::slog_extlog::stats::StatDefinitionTagged { defn: &#id, fixed_tags: &[#( (#keys, #vals) ),*] }
+            }
+        })
         .collect::<Vec<_>>();
-    let stat_ids3 = stat_ids2.clone();
+
+    // Build up the input match statements value for the `condition` method.
+    let stat_ids_cond = triggers
+        .iter()
+        .map(|t| {
+            let (keys, vals): (Vec<_>, Vec<_>) = t
+                .fixed_groups
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .unzip();
+            let id = t.id.to_string();
+            // The horrific chicanery here is because match guards can't use mutable borrows, so
+            // `any` and `find` and such methods can't be used.
+            quote! {
+                #id if (true #(&& stat_id.fixed_tags.iter().filter(|tag| tag.0 == #keys && tag.1 == #vals).count() != 0) *)
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Build up the return values for those match statements.
     let stat_conds = triggers
         .iter()
         .map(|ref t| &t.condition_body)
         .collect::<Vec<_>>();
 
-    // Write out any stats triggering code.
+    // Build up the input match statements value for the `change` method.
+    let stat_ids_change = stat_ids_cond.clone();
+
+    // Build up the return values for those match statements.
     let stat_changes = triggers
         .iter()
         .map(|t| {
@@ -368,25 +413,25 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
         .collect::<Vec<_>>();
 
     // Build up the tag (group) info for each stat.
-    let mut stats_groups = quote!{};
+    let mut stats_groups = quote! {};
     for t in &triggers {
         let id = &t.id.to_string();
-        let groups = t.group_by.clone();
-        let groups_str = groups
+        let dyn_groups = t.field_groups.clone();
+        let dyn_groups_str = dyn_groups
             .clone()
             .iter()
             .map(|s| s.to_string())
             .collect::<Vec<_>>();
         stats_groups = quote! { #stats_groups
             #id => { match tag_name {
-              #(#groups_str => self.#groups.to_string(),)*
+              #(#dyn_groups_str => self.#dyn_groups.to_string(),)*
                 _ => "".to_string() }
             },
         }
     }
 
     // Build up the bucket info for each stat.
-    let mut stats_buckets = quote!{};
+    let mut stats_buckets = quote! {};
     for t in &triggers {
         let id = &t.id.to_string();
         let bucket = t.bucket_by.clone();
@@ -401,7 +446,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     let tag_name_ident = if !triggers.is_empty() {
         quote! { tag_name }
     } else {
-        quote!{ _tag_name }
+        quote! { _tag_name }
     };
 
     let name = &ast.ident;
@@ -416,51 +461,56 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     let stat_ids_name = syn::Ident::from(format!("STATS_LIST_{}", name).to_uppercase());
 
     quote! {
-        static #stat_ids_name: &'static[
-            &'static (::slog_extlog::stats::StatDefinition + Sync)] = &[#(&#stat_ids),*];
+        static #stat_ids_name: &'static [slog_extlog::stats::StatDefinitionTagged] = &[#(#stat_ids),*];
         impl<#(#lifetimes,)* #(#tys),*> ::slog_extlog::stats::StatTrigger
             for #name<#(#lifetimes,)* #(#tys_2),*>
         #(where #tys_3: #(#bounds + )* ::slog::Value),*{
 
             fn stat_list(
-                &self) -> &'static[&'static (::slog_extlog::stats::StatDefinition + Sync)] {
+                &self) -> &'static[::slog_extlog::stats::StatDefinitionTagged] {
                 #stat_ids_name
             }
 
-
             /// The condition that must be satisfied for this stat to change.
             /// Panic in the case when we get called for an unknown stat.
-            fn condition(&self, stat_id: &::slog_extlog::stats::StatDefinition) -> bool {
-                match stat_id.name() {
-                    #(#stat_ids2 => #stat_conds,)*
+            fn condition(&self, stat_id: &::slog_extlog::stats::StatDefinitionTagged) -> bool {
+                match stat_id.defn.name() {
+                    #(#stat_ids_cond => #stat_conds,)*
                     s => panic!("Condition requested for unknown stat {}", s)
                 }
 
             }
             /// The details of the change to make for this stat, if `condition` returned true.
             fn change(&self,
-                      stat_id: &::slog_extlog::stats::StatDefinition) ->
+                      stat_id: &::slog_extlog::stats::StatDefinitionTagged) ->
                       Option<::slog_extlog::stats::ChangeType> {
-                match stat_id.name() {
-                    #(#stat_ids3 => #stat_changes,)*
+                match stat_id.defn.name() {
+                    #(#stat_ids_change => #stat_changes,)*
                     s => panic!("Change requested for unknown stat {}", s)
                 }
             }
 
             /// The fields that provide the grouped values for this stat
             fn tag_value(&self,
-                         stat_id: &::slog_extlog::stats::StatDefinition,
+                         stat_id: &::slog_extlog::stats::StatDefinitionTagged,
                          #tag_name_ident: &'static str) -> String {
-                match stat_id.name() {
-                    #stats_groups
-                    _ => "".to_string(),
+
+                // If this tag is in the fixed list, use the value provided.
+                // Otherwise, call out to the trigger's value.
+                if let Some(v) = stat_id.fixed_tags.iter().find(|name| #tag_name_ident == name.0) {
+                    v.1.to_string()
+                } else {
+                    match stat_id.defn.name() {
+                        #stats_groups
+                        _ => "".to_string(),
+                    }
                 }
             }
 
             /// The value to be used to sort the stat into buckets
             fn bucket_value(&self,
-                         stat_id: &::slog_extlog::stats::StatDefinition) -> Option<f64> {
-                match stat_id.name() {
+                         stat_id: &::slog_extlog::stats::StatDefinitionTagged) -> Option<f64> {
+                match stat_id.defn.name() {
                     # stats_buckets
                     _ => None,
                 }
@@ -479,7 +529,8 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     let tys_3 = tys.clone();
 
     // Get the log details from the attribute.
-    let vals = ast.attrs
+    let vals = ast
+        .attrs
         .iter()
         .filter(|a| a.name() == "LogDetails")
         .collect::<Vec<_>>();
@@ -492,7 +543,8 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     };
 
     // Get the fixed fields from the attribute.
-    let fields = ast.attrs
+    let fields = ast
+        .attrs
         .iter()
         .filter(|a| a.name() == "FixedFields")
         .flat_map(|ref val| match val.value {
@@ -665,6 +717,7 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
     let mut cond = None;
     let mut action = None;
     let mut value = None;
+    let mut fixed_groups = HashMap::new();
 
     for attr in attr_val {
         let (name, val) = match *attr {
@@ -679,7 +732,7 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
 
         match name {
             "StatName" => {
-                id = Some(syn::parse_ident(val).expect("Could not parse condition in StatTrigger"))
+                id = Some(syn::parse_ident(val).expect("Could not parse name in StatTrigger"))
             }
             "Condition" => {
                 cond = Some(syn::parse_expr(val).expect("Could not parse condition in StatTrigger"))
@@ -699,12 +752,22 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
                     syn::parse_expr(val).expect("Invalid ValueFrom in StatTrigger"),
                 ))
             }
+            "FixedGroups" => {
+                // Split the value
+                let groups = val.split(",");
+                for group in groups {
+                    let mut split = group.splitn(2, "=");
+                    let group_name = split.next().expect("Invalid format for FixedGroups");
+                    let group_val = split.next().expect("Invalid format for FixedGroups");
+                    fixed_groups.insert(group_name.to_string(), group_val.to_string());
+                }
+            }
             _ => panic!("Unrecognised key in StatTrigger attribute"),
         }
     }
 
     let id = id.expect("StatTrigger missing value for StatName");
-    let groups = if let syn::Body::Struct(syn::VariantData::Struct(ref fields)) = *body {
+    let field_groups = if let syn::Body::Struct(syn::VariantData::Struct(ref fields)) = *body {
         fields
             .iter()
             .filter(|f| {
@@ -745,7 +808,8 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
         condition_body: cond.unwrap_or_else(|| syn::parse_expr("true").unwrap()),
         action: action.expect("StatTrigger missing value for Action"),
         val: value.expect("StatTrigger missing value for Value or ValueFrom"),
-        group_by: groups,
+        fixed_groups,
+        field_groups,
         bucket_by: bucket_field,
     }
 }
