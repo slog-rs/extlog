@@ -1,15 +1,9 @@
 //! Tests for querying the current values of stats.
 
-extern crate futures;
+use serde::Serialize;
 
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate slog_extlog;
-#[macro_use]
-extern crate slog_extlog_derive;
+use slog_extlog::{define_stats, xlog};
+use slog_extlog_derive::ExtLoggable;
 
 use slog_extlog::slog_test::*;
 use slog_extlog::stats;

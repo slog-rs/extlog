@@ -6,13 +6,10 @@
 //! doc-tests. This should be removed once that is fixed.
 //! See https://github.com/kennytm/cargo-kcov/issues/15
 
-extern crate iobuffer;
-#[macro_use]
-extern crate serde_json;
-#[macro_use]
-extern crate slog;
-extern crate slog_extlog;
+use iobuffer;
+use serde_json::json;
 
+use slog::debug;
 use slog_extlog::slog_test;
 
 #[test]

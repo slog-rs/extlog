@@ -75,18 +75,8 @@
 //! Deriving `Value` and `ExtLoggable` for some simple objects.
 //!
 //! ```
-//! #[macro_use]
-//! extern crate slog_extlog_derive;
-//! #[macro_use]
-//! extern crate slog;
-//! #[macro_use]
-//! extern crate slog_extlog;
-//! #[macro_use]
-//! extern crate serde_derive;
-//! extern crate erased_serde;
-//!
-//! use slog_extlog::ExtLoggable;
-//! use slog_extlog::stats::StatDefinition;
+//! use slog_extlog_derive::{ExtLoggable, SlogValue};
+//! use serde::Serialize;
 //!
 //! #[derive(Clone, Serialize, SlogValue)]
 //! enum FooRspCode {
@@ -111,19 +101,12 @@
 //! Defining some statistics from a single log.
 //!
 //! ```
-//! #[macro_use]
-//! extern crate slog;
-//! #[macro_use]
-//! extern crate slog_extlog_derive;
-//! #[macro_use]
-//! extern crate slog_extlog;
-//! #[macro_use]
-//! extern crate serde_derive;
-//! extern crate erased_serde;
+//! use slog_extlog_derive::{ExtLoggable, SlogValue};
+//! use serde::Serialize;
 //!
-//! use slog_extlog::{ExtLoggable, stats};
-//! use slog_extlog::stats::StatDefinition;
-//! use slog_extlog::stats::Buckets;
+//! use slog_extlog::{define_stats, ExtLoggable, stats, xlog};
+//! use slog_extlog::stats::{Buckets, StatDefinition};
+//! use slog::o;
 //!
 //! // The prefix to add to all log identifiers.
 //! const CRATE_LOG_NAME: &'static str = "FOO";
@@ -173,14 +156,9 @@
 
 #![recursion_limit = "128"]
 
-//#![feature(trace_macros)]
-//trace_macros!(true);
-
 extern crate proc_macro;
 #[macro_use]
 extern crate quote;
-extern crate slog;
-extern crate syn;
 
 use proc_macro::TokenStream;
 use slog::Level;
@@ -281,11 +259,11 @@ fn impl_value_traits(ast: &syn::DeriveInput) -> quote::Tokens {
     // Generate implementations of slog::Value and slog::SerdeValue, for the purposes of
     // serialization.
     quote! {
-        impl <#(#lifetimes,)* #(#tys),*> ::slog::SerdeValue for #name<#(#lifetimes,)* #(#tys_2),*>
-            #(where #tys_3: #(#bounds + )* ::serde::Serialize + ::slog::Value),*  {
+        impl <#(#lifetimes,)* #(#tys),*> slog::SerdeValue for #name<#(#lifetimes,)* #(#tys_2),*>
+            #(where #tys_3: #(#bounds + )* serde::Serialize + slog::Value),*  {
 
             /// Convert into a serde object.
-            fn as_serde(&self) -> &::erased_serde::Serialize {
+            fn as_serde(&self) -> &erased_serde::Serialize {
                 self
             }
 
@@ -293,17 +271,17 @@ fn impl_value_traits(ast: &syn::DeriveInput) -> quote::Tokens {
             /// converting the structure even if its lifetimes etc are not static.
             ///
             /// This enables functionality like `slog-async` and similar.
-            fn to_sendable(&self) -> Box<::slog::SerdeValue + Send + 'static> {
+            fn to_sendable(&self) -> Box<slog::SerdeValue + Send + 'static> {
                 Box::new(self.clone())
             }
         }
 
-        impl<#(#lifetimes,)* #(#tys_4),*> ::slog::Value for #name<#(#lifetimes,)* #(#tys_5),*>
-            #(where #tys_6: #(#bounds2 + )* ::slog::Value),* {
+        impl<#(#lifetimes,)* #(#tys_4),*> slog::Value for #name<#(#lifetimes,)* #(#tys_5),*>
+            #(where #tys_6: #(#bounds2 + )* slog::Value),* {
             fn serialize(&self,
-                         _record: &::slog::Record,
-                         key: ::slog::Key,
-                         serializer: &mut ::slog::Serializer) -> ::slog::Result {
+                         _record: &slog::Record,
+                         key: slog::Key,
+                         serializer: &mut slog::Serializer) -> slog::Result {
                 serializer.emit_serde(key, self)
 
             }
@@ -357,7 +335,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
                 .unzip();
             let id = &t.id;
             quote! {
-               ::slog_extlog::stats::StatDefinitionTagged { defn: &#id, fixed_tags: &[#( (#keys, #vals) ),*] }
+               slog_extlog::stats::StatDefinitionTagged { defn: &#id, fixed_tags: &[#( (#keys, #vals) ),*] }
             }
         })
         .collect::<Vec<_>>();
@@ -399,13 +377,13 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
             });
             match t.action {
                 StatTriggerAction::Increment => quote! {
-                   Some(::slog_extlog::stats::ChangeType::Incr(#val))
+                   Some(slog_extlog::stats::ChangeType::Incr(#val))
                 },
                 StatTriggerAction::Decrement => quote! {
-                    Some(::slog_extlog::stats::ChangeType::Decr(#val))
+                    Some(slog_extlog::stats::ChangeType::Decr(#val))
                 },
                 StatTriggerAction::SetValue => quote! {
-                    Some(::slog_extlog::stats::ChangeType::SetTo(#val as isize))
+                    Some(slog_extlog::stats::ChangeType::SetTo(#val as isize))
                 },
                 StatTriggerAction::Ignore => quote! { None },
             }
@@ -462,18 +440,18 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
 
     quote! {
         static #stat_ids_name: &'static [slog_extlog::stats::StatDefinitionTagged] = &[#(#stat_ids),*];
-        impl<#(#lifetimes,)* #(#tys),*> ::slog_extlog::stats::StatTrigger
+        impl<#(#lifetimes,)* #(#tys),*> slog_extlog::stats::StatTrigger
             for #name<#(#lifetimes,)* #(#tys_2),*>
-        #(where #tys_3: #(#bounds + )* ::slog::Value),*{
+        #(where #tys_3: #(#bounds + )* slog::Value),*{
 
             fn stat_list(
-                &self) -> &'static[::slog_extlog::stats::StatDefinitionTagged] {
+                &self) -> &'static[slog_extlog::stats::StatDefinitionTagged] {
                 #stat_ids_name
             }
 
             /// The condition that must be satisfied for this stat to change.
             /// Panic in the case when we get called for an unknown stat.
-            fn condition(&self, stat_id: &::slog_extlog::stats::StatDefinitionTagged) -> bool {
+            fn condition(&self, stat_id: &slog_extlog::stats::StatDefinitionTagged) -> bool {
                 match stat_id.defn.name() {
                     #(#stat_ids_cond => #stat_conds,)*
                     s => panic!("Condition requested for unknown stat {}", s)
@@ -482,8 +460,8 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
             }
             /// The details of the change to make for this stat, if `condition` returned true.
             fn change(&self,
-                      stat_id: &::slog_extlog::stats::StatDefinitionTagged) ->
-                      Option<::slog_extlog::stats::ChangeType> {
+                      stat_id: &slog_extlog::stats::StatDefinitionTagged) ->
+                      Option<slog_extlog::stats::ChangeType> {
                 match stat_id.defn.name() {
                     #(#stat_ids_change => #stat_changes,)*
                     s => panic!("Change requested for unknown stat {}", s)
@@ -492,7 +470,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
 
             /// The fields that provide the grouped values for this stat
             fn tag_value(&self,
-                         stat_id: &::slog_extlog::stats::StatDefinitionTagged,
+                         stat_id: &slog_extlog::stats::StatDefinitionTagged,
                          #tag_name_ident: &'static str) -> String {
 
                 // If this tag is in the fixed list, use the value provided.
@@ -509,7 +487,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
 
             /// The value to be used to sort the stat into buckets
             fn bucket_value(&self,
-                         stat_id: &::slog_extlog::stats::StatDefinitionTagged) -> Option<f64> {
+                         stat_id: &slog_extlog::stats::StatDefinitionTagged) -> Option<f64> {
                 match stat_id.defn.name() {
                     # stats_buckets
                     _ => None,
@@ -560,22 +538,22 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     // Generate the actual log call based on the provided level.
     let match_gen = match level {
         Level::Critical => {
-            quote! { crit!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
+            quote! { slog::crit!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
         }
         Level::Error => {
-            quote! { error!(logger, #text; "log_id" => id_val, #(#fields, )* "details" =>  self) }
+            quote! { slog::error!(logger, #text; "log_id" => id_val, #(#fields, )* "details" =>  self) }
         }
         Level::Warning => {
-            quote! { warn!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
+            quote! { slog::warn!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
         }
         Level::Info => {
-            quote! { info!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
+            quote! { slog::info!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
         }
         Level::Debug => {
-            quote! { debug!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
+            quote! { slog::debug!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
         }
         Level::Trace => {
-            quote! { trace!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
+            quote! { slog::trace!(logger, #text; "log_id" => id_val, #(#fields, )* "details" => self) }
         }
     };
 
@@ -583,12 +561,12 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
 
     // Write out the implementation of ExtLoggable.
     quote! {
-        impl<#(#lifetimes,)* #(#tys),*> ::slog_extlog::ExtLoggable
+        impl<#(#lifetimes,)* #(#tys),*> slog_extlog::ExtLoggable
             for #name<#(#lifetimes,)* #(#tys_2),*>
-        #(where #tys_3: #(#bounds + )* ::slog::Value),*{
+        #(where #tys_3: #(#bounds + )* slog::Value),*{
 
-            fn ext_log<T>(&self, logger: &::slog_extlog::stats::StatisticsLogger<T>)
-            where T: ::slog_extlog::stats::StatisticsLogFormatter + Send + Sync + 'static {
+            fn ext_log<T>(&self, logger: &slog_extlog::stats::StatisticsLogger<T>)
+            where T: slog_extlog::stats::StatisticsLogFormatter + Send + Sync + 'static {
                 logger.update_stats(self);
                 // Use a `FnValue` for the log ID so the format string is allcoated only if the log
                 // is actually written.  dieally, we'd like this to be compile-time allocated but

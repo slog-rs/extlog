@@ -24,16 +24,14 @@
 //! ## Log objects
 //! To use this crate to define external logs:
 //!
-//!   - Add `slog-extlog` to your `Cargo.toml`.
-//!   - Import it with `#[macro_use] extern crate slog_extlog;` in your toplevel module.
+//!   - Add `slog-extlog` and `dlog-extlog-derive` to your `Cargo.toml`.
 //!
 //! To make a new external log using this crate:
 //!
 //!   - Define a structure with appropriate fields to act as the log.
 //!   - Define a constant string named `CRATE_LOG_NAME` which uniquely identifies this crate in
 //!     log identifiers.  This must uniquely identify your crate.
-//!   - Import `slog_extlog_derive` with `#[macro_use]`, and derive the
-//!     `ExtLoggable` trait for this object.
+//!   - `use slog_extlog_derive::ExtLoggable` and derive the `ExtLoggable` trait for this object.
 //!      - If your structure is overly complex or unusual, manually implement [`ExtLoggable`].
 //!   - Early in your program or libary, obtain or create a [`Logger`] of the correct format and
 //!     wrap it in a ['StatisticsLogger`].
@@ -41,16 +39,16 @@
 //! Unless you want to support statistics tracking, then the easiest way to obtain an
 //! appropriate logger is to create a [`DefaultLogger`](./type.DefaultLogger.html).
 //!
-//! You can then call the [`xlog!()`] macro, passing in the [`StatisticsLogger`] and an instance
-//! of your structure, and it will be logged according to the Logger's associated Drain as usual.
+//! You can then call the [`slog_extlog::xlog!()`] macro, passing in the [`StatisticsLogger`] and
+//! an instance of your structure, and it will be logged according to the Logger's associated Drain
+//! as usual.
 //! Structure parameters will be added as key-value pairs, but with the bonus that you get
 //! type checking.
 //!
 //! You can continue to make developer logs simply using `slog` as normal:
 //!
 //!   - Add `slog` to your `Cargo.toml`.
-//!   - Import it with `#[macro_use] extern crate slog;` in your top level module.
-//!   - Use the usual [`slog`] macros, e.g., `debug!`.
+//!   - Use the usual [`slog`] macros, e.g., `slog::debug!`.
 //!
 //! ## Parameters
 //! Parameters to external logs must implement [`slog::Value`].
@@ -78,19 +76,11 @@
 //! An example of a simple program that defines and produces some basic logs.
 //!
 //! ```
-//! #[macro_use]
-//! extern crate slog_extlog_derive;
-//! #[macro_use]
-//! extern crate slog;
-//! extern crate slog_json;
-//! #[macro_use]
-//! extern crate slog_extlog;
-//! #[macro_use]
-//! extern crate serde_derive;
-//! extern crate erased_serde;
+//! use serde::Serialize;
+//! use slog_extlog::{DefaultLogger, define_stats, xlog};
+//! use slog_extlog_derive::{ExtLoggable, SlogValue};
 //!
-//! use slog_extlog::{DefaultLogger, ExtLoggable};
-//! use slog::Drain;
+//! use slog::{Drain, debug, info, o};
 //! use std::sync::Mutex;
 //!
 //! #[derive(Clone, Serialize, ExtLoggable)]
@@ -157,13 +147,6 @@
 
 // Copyright 2017 Metaswitch Networks
 
-extern crate serde;
-#[macro_use]
-extern crate slog;
-
-#[macro_use]
-extern crate serde_derive;
-
 // Statistics handling
 pub mod stats;
 
@@ -213,12 +196,7 @@ macro_rules! xlog {
 /// For example, if you want to use the (fictional) `foo` crate and log errors from it, then write:
 ///
 /// ```ignore
-/// #[macro_use]
-/// extern crate slog_extlog;
-/// extern crate foo;
-///
-/// impl_value_wrapper!(FooError, foo::Error);
-/// # fn main() {}
+/// slog_extlog::impl_value_wrapper!(FooError, foo::Error);
 /// ```
 /// Then anywhere you want to log a `foo::Error`, you can instead use `FooError(foo::Error)` - the
 /// logged value will use `foo:Error`'s impl of `Display`.
@@ -226,34 +204,29 @@ macro_rules! xlog {
 /// For a type which implements `Debug` but not `Display`, then you can use a `?` character:
 ///
 /// ```ignore
-/// # #[macro_use]
-/// # extern crate slog_extlog;
-/// # extern crate foo;
-/// impl_value_wrapper!(FooInternal, ?foo::InternalType);
-/// # fn main() {}
+/// slog_extlog::impl_value_wrapper!(FooInternal, ?foo::InternalType);
 /// ```
 ///
 /// Note: this macro can be deprecated once `default impl` is available and
 /// [this issue](https://github.com/slog-rs/slog/issues/120) is fixed.
 ///
-///
 #[macro_export]
 macro_rules! impl_value_wrapper {
     ($new:ident, ?($inner:tt)*) => {
         pub struct $new(pub $($inner)*);
-        impl ::slog::Value for $new {
-            fn serialize(&self, record: &Record, key: Key, serializer: &mut Serializer) -> Result {
-                use ::slog::KV;
-                b!(key => ?&self.0).serialize(record, serializer)
+        impl slog::Value for $new {
+            fn serialize(&self, record: &slog::Record, key: Key, serializer: &mut slog::Serializer) -> Result {
+                use slog::KV;
+                slog::b!(key => ?&self.0).serialize(record, serializer)
             }
         }
     };
     ($new:ident, ($inner:tt)*) => {
         pub struct $new(pub $($inner)*);
-        impl ::slog::Value for $new {
-            fn serialize(&self, record: &Record, key: Key, serializer: &mut Serializer) -> Result {
-                use ::slog::KV;
-                b!(key => %&self.0).serialize(record, serializer)
+        impl slog::Value for $new {
+            fn serialize(&self, record: &slog::Record, key: Key, serializer: &mut slog::Serializer) -> Result {
+                use slog::KV;
+                slog::b!(key => %&self.0).serialize(record, serializer)
             }
         }
     };

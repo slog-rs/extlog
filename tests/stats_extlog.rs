@@ -1,15 +1,11 @@
 //! Extlog tests for Stats tracker.
 //!
 
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate slog_extlog;
-#[macro_use]
-extern crate slog_extlog_derive;
+use slog::{info, o};
+use slog_extlog::{define_stats, xlog};
+use slog_extlog_derive::ExtLoggable;
 
+use serde::Serialize;
 use slog_extlog::slog_test::*;
 use std::{panic, thread, time};
 
