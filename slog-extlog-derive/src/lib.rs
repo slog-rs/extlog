@@ -621,7 +621,7 @@ fn parse_log_details(attr_val: &[syn::NestedMetaItem]) -> (Level, String, u64) {
                             // Level must be a valid slog::Level.  Generate an error if not.
                             Some(
                                 Level::from_str(&s)
-                                    .expect(&format!("Invalid log level provided: {}", s)),
+                                    .unwrap_or_else(|_| panic!("Invalid log level provided: {}", s)),
                             )
                         }
                         _ => panic!(
@@ -732,9 +732,9 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
             }
             "FixedGroups" => {
                 // Split the value
-                let groups = val.split(",");
+                let groups = val.split(',');
                 for group in groups {
-                    let mut split = group.splitn(2, "=");
+                    let mut split = group.splitn(2, '=');
                     let group_name = split.next().expect("Invalid format for FixedGroups");
                     let group_val = split.next().expect("Invalid format for FixedGroups");
                     fixed_groups.insert(group_name.to_string(), group_val.to_string());

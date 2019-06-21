@@ -69,7 +69,7 @@ fn setup_logger() -> StatisticsLogger<DefaultStatisticsLogFormatter> {
     // Use the same tokio core for speed.
     let core = Core::new().expect("Failed to initialize tokio core");
     StatisticsLogger::new(
-        slog::Logger::root(slog::Discard, o!()),
+        slog::Logger::root(slog::Discard, slog::o!()),
         StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
             .with_stats(vec![SLOG_TEST_STATS])
             .with_core(core.handle())

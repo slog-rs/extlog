@@ -37,7 +37,7 @@ fn test_main() {
     // Alternate test code - parse selected logs and check their contents.
     let abc_logs = slog_test::logs_in_range("ABC", "ABD", &mut data);
     assert!(abc_logs.len() == 1);
-    assert!(abc_logs[0]["msg"].as_str().unwrap() == "Another log".to_string());
+    assert!(abc_logs[0]["msg"].as_str().unwrap() == "Another log");
 }
 
 #[cfg(test)]
