@@ -10,7 +10,7 @@ keywords = ["slog", "log", "logging"]
 readme = "../README.md"
 
 [dependencies]
-slog =  { version = "2.1", features = ['nested-values'] }
+slog =  { version = "2.4", features = ['nested-values'] }
 syn = {version = "0.11.9", features = ["full"] }
 quote = "0.3.10"
 slog-extlog = { version = "5", path = ".." }
