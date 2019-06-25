@@ -1,15 +1,9 @@
 //! Tests for querying the current values of stats.
 
-extern crate futures;
+use serde::Serialize;
 
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate slog_extlog;
-#[macro_use]
-extern crate slog_extlog_derive;
+use slog_extlog::{define_stats, xlog};
+use slog_extlog_derive::ExtLoggable;
 
 use slog_extlog::slog_test::*;
 use slog_extlog::stats;
@@ -147,7 +141,7 @@ fn request_for_single_counter() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_counter",
             description: "Test counter",
             stat_type: Counter,
@@ -169,7 +163,7 @@ fn request_for_single_gauge() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_gauge",
             description: "Test gauge",
             stat_type: Gauge,
@@ -191,7 +185,7 @@ fn request_for_multiple_metrics() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![
+        &[
             ExpectedStatSnapshot {
                 name: "test_counter",
                 description: "Test counter",
@@ -230,7 +224,7 @@ fn request_for_updated_metrics() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![
+        &[
             ExpectedStatSnapshot {
                 name: "test_counter",
                 description: "Test counter",
@@ -265,7 +259,7 @@ fn request_for_single_counter_with_groups_but_no_values() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_grouped_counter",
             description: "Test grouped counter",
             stat_type: Counter,
@@ -283,7 +277,7 @@ fn request_for_single_gauge_with_groups_but_no_values() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_grouped_gauge",
             description: "Test grouped gauge",
             stat_type: Gauge,
@@ -310,7 +304,7 @@ fn request_for_single_counter_with_groups_and_one_value() {
     let stats = logger.get_stats();
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_grouped_counter",
             description: "Test grouped counter",
             stat_type: Counter,
@@ -341,7 +335,7 @@ fn request_for_single_gauge_with_groups_and_one_value() {
     let stats = logger.get_stats();
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_grouped_gauge",
             description: "Test grouped gauge",
             stat_type: Gauge,
@@ -381,7 +375,7 @@ fn request_for_single_counter_with_groups_and_two_values() {
     let stats = logger.get_stats();
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_grouped_counter",
             description: "Test grouped counter",
             stat_type: Counter,
@@ -410,7 +404,7 @@ fn request_for_bucket_counter_freq() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_bucket_counter_freq",
             description: "Test bucket counter",
             stat_type: BucketCounter,
@@ -436,7 +430,7 @@ fn request_for_bucket_counter_freq() {
                     value: 0f64,
                 },
             ],
-            buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &vec![1, 2, 3])),
+            buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &[1, 2, 3])),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -452,7 +446,7 @@ fn request_for_bucket_counter_freq_one_value() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_bucket_counter_freq",
             description: "Test bucket counter",
             stat_type: BucketCounter,
@@ -478,7 +472,7 @@ fn request_for_bucket_counter_freq_one_value() {
                     value: 0f64,
                 },
             ],
-            buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &vec![1, 2, 3])),
+            buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &[1, 2, 3])),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }
@@ -491,7 +485,7 @@ fn request_for_bucket_counter_cumul_freq() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_bucket_counter_cumul_freq",
             description: "Test cumulative bucket counter",
             stat_type: BucketCounter,
@@ -520,7 +514,7 @@ fn request_for_bucket_counter_cumul_freq() {
             buckets: Some(Buckets::new(
                 BucketMethod::CumulFreq,
                 "bucket",
-                &vec![10, 20, 30],
+                &[10, 20, 30],
             )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -554,7 +548,7 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
 
     check_expected_stat_snaphots(
         &stats,
-        &vec![ExpectedStatSnapshot {
+        &[ExpectedStatSnapshot {
             name: "test_group_bucket_counter",
             description: "Test cumulative bucket counter with groups",
             stat_type: BucketCounter,
@@ -593,7 +587,7 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
             buckets: Some(Buckets::new(
                 BucketMethod::CumulFreq,
                 "bucket",
-                &vec![-8, 0],
+                &[-8, 0],
             )),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
@@ -643,7 +637,7 @@ fn request_for_many_metrics() {
     let stats = logger.get_stats();
     check_expected_stat_snaphots(
         &stats,
-        &vec![
+        &[
             ExpectedStatSnapshot {
                 name: "test_counter",
                 description: "Test counter",
@@ -728,7 +722,7 @@ fn request_for_many_metrics() {
                         value: 0f64,
                     },
                 ],
-                buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &vec![1, 2, 3])),
+                buckets: Some(Buckets::new(BucketMethod::Freq, "bucket", &[1, 2, 3])),
             },
             ExpectedStatSnapshot {
                 name: "test_bucket_counter_cumul_freq",
@@ -759,7 +753,7 @@ fn request_for_many_metrics() {
                 buckets: Some(Buckets::new(
                     BucketMethod::CumulFreq,
                     "bucket",
-                    &vec![10, 20, 30],
+                    &[10, 20, 30],
                 )),
             },
             ExpectedStatSnapshot {
@@ -791,7 +785,7 @@ fn request_for_many_metrics() {
                 buckets: Some(Buckets::new(
                     BucketMethod::CumulFreq,
                     "bucket",
-                    &vec![10, 20, 30],
+                    &[10, 20, 30],
                 )),
             },
         ], // LCOV_EXCL_LINE Kcov bug?

@@ -25,14 +25,15 @@
 //! [`slog-extlog-derive`]: ../../slog_extlog_derive/index.html
 //! [`StatisticsLogger`]: ./struct.StatisticsLogger.html
 
-extern crate futures;
-extern crate tokio_core;
-extern crate tokio_timer;
+use futures;
+use tokio_core;
+use tokio_timer;
 
 use self::futures::stream::Stream;
 use self::futures::Future;
 use self::tokio_core::reactor::{Core, Handle};
 use self::tokio_timer::Timer;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
@@ -44,7 +45,7 @@ use std::sync::RwLock;
 use std::thread;
 use std::time::Duration;
 
-use super::slog;
+use slog::info;
 
 //////////////////////////////////////////////////////
 // Public types - stats definitions
@@ -145,23 +146,23 @@ macro_rules! define_stats {
         }
 
         $(
-            define_stats!{@single $stat, $($details),*}
+            $crate::define_stats!{@single $stat, $($details),*}
         )*
     };
 
     // `BucketCounter`s require a `BucketMethod`, bucket label and bucket limits
     (@single $stat:ident, BucketCounter, $desc:expr, [$($tags:tt),*], ($bmethod:ident, $blabel:expr, [$($blimits:expr),*]) ) => {
-        define_stats!{@inner $stat, BucketCounter, $desc, $bmethod, $blabel, [$($tags),*], [$($blimits),*]}
+        $crate::define_stats!{@inner $stat, BucketCounter, $desc, $bmethod, $blabel, [$($tags),*], [$($blimits),*]}
     };
 
     // Non `BucketCounter` stat types
     (@single $stat:ident, $stype:ident, $desc:expr, [$($tags:tt),*] ) => {
-        define_stats!{@inner $stat, $stype, $desc, Freq, "", [$($tags),*], []}
+        $crate::define_stats!{@inner $stat, $stype, $desc, Freq, "", [$($tags),*], []}
     };
 
     // Retained for backwards-compatibility
     (@single $stat:ident, $stype:ident, $id:expr, $desc:expr, [$($tags:tt),*] ) => {
-        define_stats!{@inner $stat, $stype, $desc, Freq, "", [$($tags),*], []}
+        $crate::define_stats!{@inner $stat, $stype, $desc, Freq, "", [$($tags),*], []}
     };
 
     // Trait impl for StatDefinition
@@ -186,7 +187,7 @@ macro_rules! define_stats {
                     $crate::stats::StatType::BucketCounter => {
                         Some($crate::stats::Buckets::new($crate::stats::BucketMethod::$bmethod,
                             $blabel,
-                            &vec![$($blimits as i64),* ],
+                            &[$($blimits as i64),* ],
                         ))
                     },
                     _ => None
@@ -199,7 +200,7 @@ macro_rules! define_stats {
 /// A stat definition, possibly filtered with some specific tag values.
 pub struct StatDefinitionTagged {
     /// The statistic definition
-    pub defn: &'static (StatDefinition + Sync),
+    pub defn: &'static (dyn StatDefinition + Sync),
     /// THe fixed tag values.  The keys *must* match keys in `defn`.
     pub fixed_tags: &'static [(&'static str, &'static str)],
 }
@@ -249,9 +250,9 @@ pub enum BucketLimit {
 impl slog::Value for BucketLimit {
     fn serialize(
         &self,
-        _record: &::slog::Record,
+        _record: &::slog::Record<'_>,
         key: ::slog::Key,
-        serializer: &mut ::slog::Serializer,
+        serializer: &mut dyn (::slog::Serializer),
     ) -> ::slog::Result {
         match *self {
             BucketLimit::Num(value) => serializer.emit_i64(key, value),
@@ -261,7 +262,7 @@ impl slog::Value for BucketLimit {
 }
 
 impl fmt::Display for BucketLimit {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BucketLimit::Num(val) => write!(f, "{}", val),
             BucketLimit::Unbounded => write!(f, "Unbounded"),
@@ -356,9 +357,9 @@ pub enum StatType {
 impl slog::Value for StatType {
     fn serialize(
         &self,
-        _record: &::slog::Record,
+        _record: &::slog::Record<'_>,
         key: ::slog::Key,
-        serializer: &mut ::slog::Serializer,
+        serializer: &mut dyn (::slog::Serializer),
     ) -> ::slog::Result {
         match *self {
             StatType::Counter => serializer.emit_str(key, "counter"),
@@ -407,7 +408,7 @@ where
     }
 
     /// Add a new statistic to this tracker.
-    pub fn add_statistic(&mut self, defn: &'static (StatDefinition + Sync + RefUnwindSafe)) {
+    pub fn add_statistic(&mut self, defn: &'static (dyn StatDefinition + Sync + RefUnwindSafe)) {
         let stat = Stat {
             defn,
             is_grouped: !defn.group_by().is_empty(),
@@ -423,7 +424,7 @@ where
     ///
     /// This checks for any configured stats that are triggered by this log, and
     /// updates their value appropriately.
-    fn update_stats(&self, log: &StatTrigger) {
+    fn update_stats(&self, log: &dyn StatTrigger) {
         for stat_def in log.stat_list() {
             if log.condition(stat_def) {
                 let stat = &self.stats.get(stat_def.defn.name()).unwrap_or_else(|| {
@@ -483,7 +484,7 @@ where
 pub const DEFAULT_LOG_INTERVAL_SECS: u64 = 300;
 
 /// Type alias for the return of [`define_stats`](../macro.define_stats.html).
-pub type StatDefinitions = &'static [&'static (StatDefinition + Sync + RefUnwindSafe)];
+pub type StatDefinitions = &'static [&'static (dyn StatDefinition + Sync + RefUnwindSafe)];
 
 /// Configuration required for tracking statistics.
 ///
@@ -524,12 +525,9 @@ where
 /// Creating a config with a custom stats interval and the default formatter.
 ///
 /// ```
-/// # #[macro_use]
-/// # extern crate slog_extlog;
-/// #
 /// # use slog_extlog::stats::*;
 ///
-/// define_stats! {
+/// slog_extlog::define_stats! {
 ///     MY_STATS = {
 ///         SomeStat(Counter, "A test counter", []),
 ///         SomeOtherStat(Counter, "Another test counter", [])
@@ -647,7 +645,7 @@ pub static DEFAULT_LOG_ID: &str = "STATS-1";
 
 impl StatisticsLogFormatter for DefaultStatisticsLogFormatter {
     /// The formatting callback.  This default implementation just logs each field.
-    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData)
+    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData<'_>)
     where
         Self: Sized,
     {
@@ -674,7 +672,7 @@ pub trait StatisticsLogFormatter {
     /// The `DefaultStatisticsLogFormatter` provides a basic format, or users can override the
     /// format of the generated logs by providing an object that implements this trait in the
     /// `StatsConfig`.
-    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData)
+    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData<'_>)
     where
         Self: Sized;
 }
@@ -780,7 +778,7 @@ where
     }
 
     /// Update the statistics for the current log.
-    pub fn update_stats(&self, log: &StatTrigger) {
+    pub fn update_stats(&self, log: &dyn StatTrigger) {
         self.tracker.update_stats(log)
     }
 
@@ -818,7 +816,7 @@ impl StatSnapshotValues {
 // LCOV_EXCL_START not interesting to track automatic derive coverage
 #[derive(Debug)]
 pub struct StatSnapshot {
-    pub definition: &'static StatDefinition,
+    pub definition: &'static dyn StatDefinition,
     pub values: StatSnapshotValues,
 }
 // LCOV_EXCL_STOP
@@ -826,7 +824,7 @@ pub struct StatSnapshot {
 impl StatSnapshot {
     /// Create a new snapshot of a stat. The StatSnapshotValues enum variant passed
     /// should match the stat type in the definition.
-    pub fn new(definition: &'static StatDefinition, values: StatSnapshotValues) -> Self {
+    pub fn new(definition: &'static dyn StatDefinition, values: StatSnapshotValues) -> Self {
         StatSnapshot { definition, values }
     }
 }
@@ -865,7 +863,7 @@ enum StatTypeData {
 
 impl StatTypeData {
     /// Create a new `StatTypeData`
-    fn new(defn: &'static StatDefinition) -> Self {
+    fn new(defn: &'static dyn StatDefinition) -> Self {
         match defn.stype() {
             StatType::Counter => StatTypeData::Counter,
             StatType::Gauge => StatTypeData::Gauge,
@@ -882,7 +880,7 @@ impl StatTypeData {
     }
 
     /// Update the stat values
-    fn update(&self, defn: &StatDefinitionTagged, trigger: &StatTrigger) {
+    fn update(&self, defn: &StatDefinitionTagged, trigger: &dyn StatTrigger) {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
             bucket_counter_data.update(defn, trigger);
         }
@@ -892,7 +890,7 @@ impl StatTypeData {
     fn get_tag_pairs<'a, 'b, 'c>(
         &'a self,
         tag_values: &'b str,
-        defn: &'c StatDefinition,
+        defn: &'c dyn StatDefinition,
     ) -> Option<Vec<(&'static str, &'b str)>> {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
             Some(bucket_counter_data.get_tag_pairs(tag_values, defn))
@@ -938,7 +936,7 @@ impl BucketCounterData {
     }
 
     /// Update the stat values.
-    fn update(&self, defn: &StatDefinitionTagged, trigger: &StatTrigger) {
+    fn update(&self, defn: &StatDefinitionTagged, trigger: &dyn StatTrigger) {
         // Update the bucketed values.
         let bucket_value = trigger.bucket_value(defn).expect("Bad log definition");
         let buckets_to_update = self.buckets.assign_buckets(bucket_value);
@@ -960,7 +958,7 @@ impl BucketCounterData {
     fn update_grouped(
         &self,
         defn: &StatDefinitionTagged,
-        trigger: &StatTrigger,
+        trigger: &dyn StatTrigger,
         buckets_to_update: &[usize],
     ) {
         let change = trigger.change(defn).expect("Bad log definition");
@@ -1006,7 +1004,7 @@ impl BucketCounterData {
     fn get_tag_pairs<'a, 'b, 'c>(
         &'a self,
         tag_values: &'b str,
-        defn: &'c StatDefinition,
+        defn: &'c dyn StatDefinition,
     ) -> Vec<(&'static str, &'b str)> {
         let mut tag_names = defn.group_by();
         // Add the bucket label name as an additional tag name.
@@ -1101,7 +1099,7 @@ impl BucketCounterData {
 #[derive(Debug)]
 struct Stat {
     // The definition fields, as a trait object.
-    defn: &'static (StatDefinition + Sync + RefUnwindSafe),
+    defn: &'static (dyn StatDefinition + Sync + RefUnwindSafe),
     // The value - if grouped, this is the total value across all statistics.
     value: StatValue,
     // Does this stat use groups.  Cached here for efficiency.
@@ -1151,7 +1149,7 @@ impl Stat {
     }
 
     /// Update the stat's value(s) according to the given `StatTrigger` and `StatDefinition`.
-    fn update(&self, defn: &StatDefinitionTagged, trigger: &StatTrigger) {
+    fn update(&self, defn: &StatDefinitionTagged, trigger: &dyn StatTrigger) {
         // update the stat value
         self.value
             .update(&trigger.change(defn).expect("Bad log definition"));
@@ -1165,7 +1163,7 @@ impl Stat {
         self.stat_type_data.update(defn, trigger);
     }
 
-    fn update_grouped(&self, defn: &StatDefinitionTagged, trigger: &StatTrigger) {
+    fn update_grouped(&self, defn: &StatDefinitionTagged, trigger: &dyn StatTrigger) {
         let change = trigger.change(defn).expect("Bad log definition");
 
         let tag_values = self
@@ -1297,7 +1295,7 @@ mod tests {
     #[allow(dead_code)]
     struct DummyNonCloneFormatter;
     impl StatisticsLogFormatter for DummyNonCloneFormatter {
-        fn log_stat(_logger: &StatisticsLogger<Self>, _stat: &StatLogData)
+        fn log_stat(_logger: &StatisticsLogger<Self>, _stat: &StatLogData<'_>)
         where
             Self: Sized,
         {
@@ -1308,7 +1306,7 @@ mod tests {
     // Check that loggers can be cloned even if the formatter can't.
     fn check_clone() {
         let logger = StatisticsLogger::new(
-            slog::Logger::root(slog::Discard, o!()),
+            slog::Logger::root(slog::Discard, slog::o!()),
             StatsConfigBuilder::<DummyNonCloneFormatter>::new().fuse(),
         );
 

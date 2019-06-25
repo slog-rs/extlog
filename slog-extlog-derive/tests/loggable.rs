@@ -3,18 +3,10 @@
 //! Copyright 2017 Metaswitch Networks
 //!
 
-extern crate iobuffer;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate slog_extlog;
-#[macro_use]
-extern crate slog_extlog_derive;
-
-extern crate erased_serde;
+use serde::Serialize;
+use slog::o;
+use slog_extlog::xlog;
+use slog_extlog_derive::{ExtLoggable, SlogValue};
 
 use slog::Logger;
 use slog_extlog::slog_test;

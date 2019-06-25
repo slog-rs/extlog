@@ -6,13 +6,10 @@
 //! doc-tests. This should be removed once that is fixed.
 //! See https://github.com/kennytm/cargo-kcov/issues/15
 
-extern crate iobuffer;
-#[macro_use]
-extern crate serde_json;
-#[macro_use]
-extern crate slog;
-extern crate slog_extlog;
+use iobuffer;
+use serde_json::json;
 
+use slog::debug;
 use slog_extlog::slog_test;
 
 #[test]
@@ -40,7 +37,7 @@ fn test_main() {
     // Alternate test code - parse selected logs and check their contents.
     let abc_logs = slog_test::logs_in_range("ABC", "ABD", &mut data);
     assert!(abc_logs.len() == 1);
-    assert!(abc_logs[0]["msg"].as_str().unwrap() == "Another log".to_string());
+    assert!(abc_logs[0]["msg"].as_str().unwrap() == "Another log");
 }
 
 #[cfg(test)]

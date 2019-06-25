@@ -8,6 +8,7 @@ homepage = "https://github.com/slog-rs/extlog"
 repository = "https://github.com/slog-rs/extlog"
 keywords = ["slog", "log", "logging"]
 readme = "README.md"
+edition = "2018"
 
 [[bench]]
 harness = false
@@ -17,15 +18,14 @@ name = "stats"
 erased-serde = "0.3"
 futures = "0.1"
 iobuffer= "0.1"
-serde = "1.0"
-serde_derive = "1.0"
+serde = {version = "1.0", features = ["derive"] }
 serde_json = "1"
 tokio-core = "0.1"
 tokio-timer = "0.1"
 
 [dependencies.slog]
 features = ["nested-values"]
-version = "=2.1.1"
+version = "2.4"
 
 [dependencies.slog-json]
 features = ["nested-values"]

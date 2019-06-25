@@ -1,15 +1,11 @@
 //! Extlog tests for Stats tracker.
 //!
 
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate slog_extlog;
-#[macro_use]
-extern crate slog_extlog_derive;
+use slog::{info, o};
+use slog_extlog::{define_stats, xlog};
+use slog_extlog_derive::ExtLoggable;
 
+use serde::Serialize;
 use slog_extlog::slog_test::*;
 use std::{panic, thread, time};
 
@@ -517,7 +513,7 @@ fn test_extloggable_bucket_counter_freq_high_value() {
     xlog!(
         logger,
         FifthExternalLog {
-            floating: 10 as f32
+            floating: 10_f32
         }
     );
 
@@ -613,7 +609,7 @@ fn test_extloggable_bucket_counter_cumul_freq() {
 #[test]
 fn test_extloggable_bucket_counter_cumul_freq_high_value() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
-    xlog!(logger, FifthExternalLog { floating: 8 as f32 });
+    xlog!(logger, FifthExternalLog { floating: 8_f32 });
 
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
@@ -715,7 +711,7 @@ fn test_extloggable_bucket_counter_grouped_freq() {
         SixthExternalLog {
             name: "first".to_string(),
             error: 1,
-            floating: -7 as f32
+            floating: -7_f32
         }
     );
     xlog!(
@@ -723,7 +719,7 @@ fn test_extloggable_bucket_counter_grouped_freq() {
         SixthExternalLog {
             name: "second".to_string(),
             error: 2,
-            floating: 3.7634 as f32
+            floating: 3.7634_f32
         }
     );
 
@@ -783,7 +779,7 @@ fn test_extloggable_bucket_counter_grouped_cumul_freq() {
         SixthExternalLog {
             name: "first".to_string(),
             error: 1,
-            floating: -7 as f32
+            floating: -7_f32
         }
     );
     xlog!(
@@ -791,7 +787,7 @@ fn test_extloggable_bucket_counter_grouped_cumul_freq() {
         SixthExternalLog {
             name: "second".to_string(),
             error: 2,
-            floating: 3.7634 as f32
+            floating: 3.7634_f32
         }
     );
 

@@ -12,12 +12,12 @@ matrix:
 # to each such commit.
 #
 # We then build all the code, then test it.
-#
-# Tests must be run on a single thread since they share keyspaces and tables.
+before_script:
+  - rustup component add clippy
 script:
 - |
   DCO_SIGNING_BASE_COMMIT=e0b3f43a21490d815697a185e4a48c269859cbc4 &&
   if git log ${DCO_SIGNING_BASE_COMMIT}.. --grep "^signed-off-by: .\+@.\+" --regexp-ignore-case --invert-grep --no-merges | grep ^ ;
-  then echo '**One or more commits are not signed off!' ; /bin/false ; fi &&
-  cargo build --all &&
-  cargo test --all
+  then echo '**One or more commits are not signed off!' ; /bin/false ; fi
+- cargo clippy --all-targets --all-features --all -- -D warnings
+- cargo test --all

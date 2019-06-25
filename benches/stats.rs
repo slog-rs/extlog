@@ -1,27 +1,17 @@
 //! Benchmarks for stats
 //!
 
-#[macro_use]
-extern crate bencher;
-extern crate erased_serde;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate slog;
-#[macro_use]
-extern crate slog_extlog;
-#[macro_use]
-extern crate slog_extlog_derive;
-extern crate tokio_core;
-
+use serde::Serialize;
 use tokio_core::reactor::Core;
 
 use bencher::Bencher;
 use slog_extlog::stats::*;
+use slog_extlog::xlog;
+use slog_extlog_derive::ExtLoggable;
 
 const CRATE_LOG_NAME: &str = "SLOG_STATS_BENCH";
 
-define_stats! {
+slog_extlog::define_stats! {
     SLOG_TEST_STATS = {
         // Some simple counters
         TestCount(Counter, "Test counter", []),
@@ -79,7 +69,7 @@ fn setup_logger() -> StatisticsLogger<DefaultStatisticsLogFormatter> {
     // Use the same tokio core for speed.
     let core = Core::new().expect("Failed to initialize tokio core");
     StatisticsLogger::new(
-        slog::Logger::root(slog::Discard, o!()),
+        slog::Logger::root(slog::Discard, slog::o!()),
         StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
             .with_stats(vec![SLOG_TEST_STATS])
             .with_core(core.handle())
@@ -172,7 +162,7 @@ fn get_stats(bench: &mut Bencher) {
     })
 }
 
-benchmark_group!(
+bencher::benchmark_group!(
     benches,
     single_count_log,
     gauge_incr_log,
@@ -182,4 +172,4 @@ benchmark_group!(
     double_grouped_counter,
     get_stats
 );
-benchmark_main!(benches);
+bencher::benchmark_main!(benches);

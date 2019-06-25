@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 ### Changed
+- Update to 2018 edition.
+- Update to latest `slog` - stop pinning to old version.
+
 ### Added
 
 ## [5.1.0]
