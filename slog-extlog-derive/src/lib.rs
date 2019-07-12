@@ -620,8 +620,16 @@ fn parse_log_details(attr_val: &[syn::NestedMetaItem]) -> (Level, String, u64) {
                         syn::Lit::Str(ref s, _) => {
                             // Level must be a valid slog::Level.  Generate an error if not.
                             Some(
-                                Level::from_str(&s)
-                                    .unwrap_or_else(|_| panic!("Invalid log level provided: {}", s)),
+                                // We handle "Warning" specially - Level::from_str *used* to
+                                // erroneously handle this as it only did prefix matches, but
+                                // now it requires exactly the word "Warn".
+                                if s == "Warning" {
+                                    Level::Warning
+                                } else {
+                                    Level::from_str(&s).unwrap_or_else(|_| {
+                                        panic!("Invalid log level provided: {}", s)
+                                    })
+                                },
                             )
                         }
                         _ => panic!(

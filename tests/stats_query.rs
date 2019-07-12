@@ -584,11 +584,7 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
                     value: 4f64,
                 },
             ],
-            buckets: Some(Buckets::new(
-                BucketMethod::CumulFreq,
-                "bucket",
-                &[-8, 0],
-            )),
+            buckets: Some(Buckets::new(BucketMethod::CumulFreq, "bucket", &[-8, 0])),
         }],
     ); // LCOV_EXCL_LINE Kcov bug?
 }

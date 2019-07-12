@@ -510,12 +510,7 @@ fn test_extloggable_bucket_counter_freq() {
 #[test]
 fn test_extloggable_bucket_counter_freq_high_value() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
-    xlog!(
-        logger,
-        FifthExternalLog {
-            floating: 10_f32
-        }
-    );
+    xlog!(logger, FifthExternalLog { floating: 10_f32 });
 
     // Wait for the stats logs.
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
