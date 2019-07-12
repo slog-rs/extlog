@@ -6,6 +6,9 @@ This file's format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [5.2.1]
+### Changed
 - Ensure that derive log level handling still works with `slog` 2.5.
 
 ## [5.2.0]
