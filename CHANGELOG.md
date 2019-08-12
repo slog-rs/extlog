@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [5.3.0]
+### Added
+- Added `getText` method to structs which are `ExtLoggable`, so that log text can be re-used in the application without copying.
+
 ## [5.2.1]
 ### Changed
 - Ensure that derive log level handling still works with `slog` 2.5.

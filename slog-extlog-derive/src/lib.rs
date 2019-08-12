@@ -505,6 +505,9 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     let (tys, bounds) = get_types_bounds(ty_params);
     let tys_2 = tys.clone();
     let tys_3 = tys.clone();
+    let tys_4 = tys.clone();
+    let tys_5 = tys.clone();
+    let tys_6 = tys.clone();
 
     // Get the log details from the attribute.
     let vals = ast
@@ -579,6 +582,13 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
         #kv_gen
 
         #stat_gen
+
+        impl<#(#lifetimes,)* #(#tys_4),*> #name<#(#lifetimes,)* #(#tys_5),*> {
+            /// Retrieve the contents of the "Text" field associated with this log.
+            pub fn getText<#(#lifetimes,)* #(#tys_6),*>() -> &'static str {
+                return #text;
+            }
+        }
     }
 }
 
