@@ -14,7 +14,6 @@
 //! use slog::debug;
 //! use slog_extlog::slog_test;
 //!
-//! # pub fn main() {
 //! // Setup code
 //! let mut data = iobuffer::IoBuffer::new();
 //! let logger = slog_test::new_test_logger(data.clone());
@@ -36,9 +35,8 @@
 //!
 //! // Alternate test code - parse selected logs and check their contents.
 //! let abc_logs = slog_test::logs_in_range("ABC", "ABD", &mut data);
-//! assert!(abc_logs.len() == 1);
-//! assert!(abc_logs[0]["msg"].as_str().unwrap() == "Another log".to_string());
-//! # }
+//! assert_eq!(abc_logs.len(), 1);
+//! assert_eq!(abc_logs[0]["msg"].as_str().unwrap(), "Another log".to_string());
 //! ```
 //!
 //! # Statistics testing
@@ -158,11 +156,15 @@ pub fn create_logger_buffer(
     (logger, data)
 }
 
-/// An expected statistic.
+/// An expected statistic helper method.
 pub struct ExpectedStat {
+    /// Stat name E.g. "test_bucket_counter_grouped_freq"
     pub stat_name: &'static str,
+    /// Stat tag E.g. Some("name=name,error=3,bucket=-5")
     pub tag: Option<&'static str>,
+    /// Value of this stat E.g. 0f64
     pub value: f64,
+    /// Type of metric for this stat E.g. "bucket_counter"
     pub metric_type: &'static str,
 }
 
@@ -191,25 +193,74 @@ pub fn check_expected_stats(logs: &[serde_json::Value], mut expected_stats: Vec<
 }
 
 // LCOV_EXCL_START Don't test derives
+/// ExpectedStatSnapshot helper.
+/// E.g.
+/// ExpectedStatSnapshot {
+///     name: "test_group_bucket_counter",
+///     description: "Test cumulative bucket counter with groups",
+///     stat_type: BucketCounter,
+///     values: vec![
+///         ExpectedStatSnapshotValue {
+///             group_values: vec!["one".to_string(), "two".to_string()],
+///             bucket_limit: Some(BucketLimit::Num(-8)),
+///             value: 0f64,
+///         },
+///         ExpectedStatSnapshotValue {
+///             group_values: vec!["one".to_string(), "two".to_string()],
+///             bucket_limit: Some(BucketLimit::Num(0)),
+///             value: 0f64,
+///         },
+///         ExpectedStatSnapshotValue {
+///             group_values: vec!["one".to_string(), "two".to_string()],
+///             bucket_limit: Some(BucketLimit::Unbounded),
+///             value: 3f64,
+///         },
+///         ExpectedStatSnapshotValue {
+///             group_values: vec!["three".to_string(), "four".to_string()],
+///             bucket_limit: Some(BucketLimit::Num(-8)),
+///             value: 4f64,
+///         },
+///         ExpectedStatSnapshotValue {
+///             group_values: vec!["three".to_string(), "four".to_string()],
+///             bucket_limit: Some(BucketLimit::Num(0)),
+///             value: 4f64,
+///         },
+///         ExpectedStatSnapshotValue {
+///             group_values: vec!["three".to_string(), "four".to_string()],
+///             bucket_limit: Some(BucketLimit::Unbounded),
+///             value: 4f64,
+///         },
+///     ],
+///     buckets: Some(Buckets::new(BucketMethod::CumulFreq, "bucket", &[-8, 0])),
+/// }
 #[derive(Debug)]
 pub struct ExpectedStatSnapshot {
+    /// Name of the stat
     pub name: &'static str,
+    /// Description of the stat
     pub description: &'static str,
+    /// Type of the stat
     pub stat_type: StatType,
+    /// A vec of the SnapShot values expected for this snapshot.
     pub values: Vec<ExpectedStatSnapshotValue>,
+    /// The buckets for the stat.
     pub buckets: Option<Buckets>,
 }
 
+/// ExpectedStatSnapshotValue helper.
 #[derive(Debug)]
 pub struct ExpectedStatSnapshotValue {
+    /// The group values (tags) for which this value for the Snapshot os grouped by,
     pub group_values: Vec<String>,
+    /// The value of this snapshot.
     pub value: f64,
+    /// The upper limit of the bucket which is represented by this snapshot.
     pub bucket_limit: Option<BucketLimit>,
 }
 // LCOV_EXCL_STOP
 
 /// Check that a set of stat snapshots are as expected.
-pub fn check_expected_stat_snaphots(
+pub fn check_expected_stat_snapshots(
     stats: &[StatSnapshot],
     expected_stats: &[ExpectedStatSnapshot],
 ) {

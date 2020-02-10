@@ -6,7 +6,6 @@ use slog_extlog::{define_stats, xlog};
 use slog_extlog_derive::ExtLoggable;
 
 use slog_extlog::slog_test::*;
-use slog_extlog::stats;
 use slog_extlog::stats::StatType::{BucketCounter, Counter, Gauge};
 use std::str;
 
@@ -127,7 +126,7 @@ struct GroupBucketCounterLog {
 
 #[test]
 fn request_with_no_stats() {
-    let (logger, _) = create_logger_buffer(stats::EMPTY_STATS);
+    let (logger, _) = create_logger_buffer(EMPTY_STATS);
     let stats = logger.get_stats();
 
     assert_eq!(stats.len(), 0);
@@ -139,7 +138,7 @@ fn request_for_single_counter() {
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_counter",
@@ -161,7 +160,7 @@ fn request_for_single_gauge() {
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_gauge",
@@ -183,7 +182,7 @@ fn request_for_multiple_metrics() {
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[
             ExpectedStatSnapshot {
@@ -222,7 +221,7 @@ fn request_for_updated_metrics() {
 
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[
             ExpectedStatSnapshot {
@@ -257,7 +256,7 @@ fn request_for_single_counter_with_groups_but_no_values() {
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_grouped_counter",
@@ -275,7 +274,7 @@ fn request_for_single_gauge_with_groups_but_no_values() {
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_grouped_gauge",
@@ -302,7 +301,7 @@ fn request_for_single_counter_with_groups_and_one_value() {
     );
 
     let stats = logger.get_stats();
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_grouped_counter",
@@ -333,7 +332,7 @@ fn request_for_single_gauge_with_groups_and_one_value() {
     );
 
     let stats = logger.get_stats();
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_grouped_gauge",
@@ -373,7 +372,7 @@ fn request_for_single_counter_with_groups_and_two_values() {
     );
 
     let stats = logger.get_stats();
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_grouped_counter",
@@ -402,7 +401,7 @@ fn request_for_bucket_counter_freq() {
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_bucket_counter_freq",
@@ -444,7 +443,7 @@ fn request_for_bucket_counter_freq_one_value() {
 
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_bucket_counter_freq",
@@ -483,7 +482,7 @@ fn request_for_bucket_counter_cumul_freq() {
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_bucket_counter_cumul_freq",
@@ -546,7 +545,7 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
 
     let stats = logger.get_stats();
 
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[ExpectedStatSnapshot {
             name: "test_group_bucket_counter",
@@ -631,7 +630,7 @@ fn request_for_many_metrics() {
     );
 
     let stats = logger.get_stats();
-    check_expected_stat_snaphots(
+    check_expected_stat_snapshots(
         &stats,
         &[
             ExpectedStatSnapshot {

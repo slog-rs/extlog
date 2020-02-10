@@ -141,7 +141,7 @@ fn test_fixed_field() {
 
 #[test]
 fn test_generics() {
-    // Currently, fields with lifetimes cannot be used as slog::Value, becuase we need a way to
+    // Currently, fields with lifetimes cannot be used as slog::Value, because we need a way to
     // convert to a static lifetime.  Can try by making FooData have a lifetime parameter for the
     // "desc" field.
 
