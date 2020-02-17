@@ -1234,7 +1234,7 @@ impl Stat {
                 } else {
                     vec![]
                 };
-                (StatSnapshotValue::new(group_values, *value))
+                StatSnapshotValue::new(group_values, *value)
             })
             .collect()
     }
