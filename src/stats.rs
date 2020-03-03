@@ -82,7 +82,7 @@ pub trait StatDefinition: fmt::Debug {
 /// ```text
 ///   define_stats!{
 ///      STATS_LIST_NAME = {
-///          StatName(Type, "Description", ["tag1, "tag2", ...]),
+///          StatName(Type, "Description", ["tag1", "tag2", ...]),
 ///          StatName2(...),
 ///          ...
 ///      }
@@ -112,9 +112,9 @@ pub trait StatDefinition: fmt::Debug {
 ///     also be provided like so:
 ///
 /// ```text
-///   define_stats!{
+///    define_stats!{
 ///      STATS_LIST_NAME = {
-///          StatName(BucketCounter, "Description", ["tag1, "tag2", ...], (BucketMethod, "bucket_label", [1, 2, 3, ...])),
+///          StatName(BucketCounter, "Description", ["tag1", "tag2", ...], (BucketMethod, "bucket_label", [1, 2, 3, ...])),
 ///          StatName2(...),
 ///          ...
 ///      }
@@ -128,12 +128,12 @@ pub trait StatDefinition: fmt::Debug {
 ///   - The bucket label should describe what the buckets measure and should be distinct from the tags.
 ///     Each stat log will be labelled with the pair `(bucket_label, bucket_value)` in addition to the tags,
 ///     where `bucket_value` is the numerical value of the bucket the log falls into.
-
 #[macro_export]
 macro_rules! define_stats {
 
     // Entry point - match each individual stat name and pass on the details for further parsing
     ($name:ident = {$($stat:ident($($details:tt),*)),*}) => {
+        /// A vector of stats that can be passed in as the `stats` field on a `StatsConfig` object.
         pub static $name: $crate::stats::StatDefinitions = &[$(&$stat),*];
 
         mod inner_stats {
@@ -214,7 +214,7 @@ pub trait StatTrigger {
         false
     }
     /// Get the associated tag value for this log.
-    /// The value must be convertable to a string so it can be stored internally.
+    /// The value must be convertible to a string so it can be stored internally.
     fn tag_value(&self, stat_id: &StatDefinitionTagged, _tag_name: &'static str) -> String;
     /// The details of the change to make for this stat, if `condition` returned true.
     fn change(&self, _stat_id: &StatDefinitionTagged) -> Option<ChangeType> {
@@ -381,7 +381,7 @@ pub struct StatsTracker<T: StatisticsLogFormatter> {
     stats: HashMap<&'static str, Stat>,
 
     // The callback to make for logging the statistic.  This is a marker type so store it
-    // as phatom.
+    // as phantom.
     stat_formatter: PhantomData<T>,
 }
 // LCOV_EXCL_STOP
@@ -534,13 +534,11 @@ where
 ///     }
 /// }
 ///
-/// fn main() {
-///     let full_stats = vec![MY_STATS];
-///     let cfg = StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
-///                  .with_stats(full_stats)
-///                  .with_log_interval(30)
-///                  .fuse();
-/// }
+/// let full_stats = vec![MY_STATS];
+/// let cfg = StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
+///              .with_stats(full_stats)
+///              .with_log_interval(30)
+///              .fuse();
 /// ```
 pub struct StatsConfigBuilder<T: StatisticsLogFormatter> {
     cfg: StatsConfig<T>,
@@ -796,12 +794,16 @@ where
 /// The values contained in a `StatSnapshot` for each stat type.
 #[derive(Debug)]
 pub enum StatSnapshotValues {
+    /// `StatSnapshot` values for the Counter stat type.
     Counter(Vec<StatSnapshotValue>),
+    /// `StatSnapshot` values for the Gauge stat type.
     Gauge(Vec<StatSnapshotValue>),
+    /// Bucket description, and `StatSnapshot` values by bucket for the BucketCounter stat type.
     BucketCounter(Buckets, Vec<(StatSnapshotValue, BucketLimit)>),
 }
 
 impl StatSnapshotValues {
+    /// Returns true if self contains no StatSnapshotValue entries.
     pub fn is_empty(&self) -> bool {
         match self {
             StatSnapshotValues::Counter(ref vals) | StatSnapshotValues::Gauge(ref vals) => {
@@ -816,7 +818,9 @@ impl StatSnapshotValues {
 // LCOV_EXCL_START not interesting to track automatic derive coverage
 #[derive(Debug)]
 pub struct StatSnapshot {
+    /// A configured statistic, defined in terms of the external logs that trigger it to change.
     pub definition: &'static dyn StatDefinition,
+    /// The values contained in a `StatSnapshot` for each stat type.
     pub values: StatSnapshotValues,
 }
 // LCOV_EXCL_STOP
@@ -833,7 +837,11 @@ impl StatSnapshot {
 // LCOV_EXCL_START not interesting to track automatic derive coverage
 #[derive(Debug)]
 pub struct StatSnapshotValue {
+    /// A vec of the set of tags that this value belongs to. A group can have several tags
+    /// and the stat is counted separately for all distinct combinations of tag values.
+    /// This may be an empty vec is the stat is not grouped.
     pub group_values: Vec<String>,
+    /// The value of the stat with the above combination of groups (note that this may be bucketed).
     pub value: f64,
 }
 // LCOV_EXCL_STOP
@@ -1190,7 +1198,7 @@ impl Stat {
             // It's possible that while we were waiting for the write lock another thread got
             // in and created the stat entry, so check again.
             let val = inner_vals
-                .entry(tag_values.to_string())
+                .entry(tag_values)
                 .or_insert_with(|| StatValue::new(0, 1));
 
             val.update(&change);
@@ -1226,7 +1234,7 @@ impl Stat {
                 } else {
                     vec![]
                 };
-                (StatSnapshotValue::new(group_values, *value))
+                StatSnapshotValue::new(group_values, *value)
             })
             .collect()
     }
@@ -1310,6 +1318,7 @@ mod tests {
             StatsConfigBuilder::<DummyNonCloneFormatter>::new().fuse(),
         );
 
-        let _new_logger: StatisticsLogger<DummyNonCloneFormatter> = logger.clone();
+        fn is_clone<T: Clone>(_: &T) {}
+        is_clone(&logger);
     }
 }

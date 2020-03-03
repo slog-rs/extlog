@@ -1,6 +1,8 @@
 //! Benchmarks for stats
 //!
 
+#![allow(missing_docs)]
+
 use serde::Serialize;
 use tokio_core::reactor::Core;
 

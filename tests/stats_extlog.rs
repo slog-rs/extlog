@@ -270,7 +270,7 @@ fn test_extloggable_strings() {
 }
 
 #[test]
-fn test_extloggable_setto() {
+fn test_extloggable_set_to() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
     xlog!(
@@ -881,7 +881,7 @@ fn unwind_safety_works() {
 #[test]
 fn multiple_stats_defns() {
     #[derive(ExtLoggable, Clone, Serialize)]
-    #[LogDetails(Id = "100", Text = "Soemthing special happened", Level = "Info")]
+    #[LogDetails(Id = "100", Text = "Something special happened", Level = "Info")]
     #[StatTrigger(StatName = "test_special_counter", Action = "Incr", Value = "1")]
     struct SpecialLog;
 
