@@ -184,10 +184,7 @@ fn log_external_grouped(
 }
 
 // Retrieves logs for a given statistic.
-fn get_stat_logs(
-    stat_name: &'static str,
-    mut data: &mut iobuffer::IoBuffer,
-) -> Vec<serde_json::Value> {
+fn get_stat_logs(stat_name: &'static str, mut data: &mut Buffer) -> Vec<serde_json::Value> {
     logs_in_range("STATS-1", "STATS-2", &mut data)
         .iter()
         .cloned()
@@ -196,12 +193,7 @@ fn get_stat_logs(
 }
 
 // Does the work of checking that we get the expected values in our logs.
-fn check_log_fields(
-    stat_name: &'static str,
-    data: &mut iobuffer::IoBuffer,
-    metric_type: &str,
-    value: f64,
-) {
+fn check_log_fields(stat_name: &'static str, data: &mut Buffer, metric_type: &str, value: f64) {
     thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
 
     let logs = get_stat_logs(stat_name, data);
@@ -892,8 +884,7 @@ fn multiple_stats_defns() {
         }
     }
 
-    let mut data = iobuffer::IoBuffer::new();
-    let logger = new_test_logger(data.clone());
+    let (logger, mut data) = new_test_logger();
 
     let logger = StatisticsLogger::new(
         logger,

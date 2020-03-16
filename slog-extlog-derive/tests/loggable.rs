@@ -17,9 +17,8 @@ const CRATE_LOG_NAME: &str = "SLOGTST";
 
 // Helper to create a logger and matching Ring buffer to store them.
 fn create_logger(testname: &'static str) -> (Logger, iobuffer::IoBuffer) {
-    let data = iobuffer::IoBuffer::new();
-    let logger = slog_test::new_test_logger(data.clone()).new(o!("testname" => testname));
-    (logger, data)
+    let (logger, data) = slog_test::new_test_logger();
+    (logger.new(o!("testname" => testname)), data)
 }
 
 #[test]

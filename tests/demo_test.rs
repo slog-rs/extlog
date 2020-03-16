@@ -6,7 +6,6 @@
 //! doc-tests. This should be removed once that is fixed.
 //! See https://github.com/kennytm/cargo-kcov/issues/15
 
-use iobuffer;
 use serde_json::json;
 
 use slog::debug;
@@ -15,8 +14,7 @@ use slog_extlog::slog_test;
 #[test]
 fn test_main() {
     // Setup code
-    let mut data = iobuffer::IoBuffer::new();
-    let logger = slog_test::new_test_logger(data.clone());
+    let (logger, mut data) = slog_test::new_test_logger();
 
     // Application code
     debug!(logger, "Something happened to it";
