@@ -14,7 +14,8 @@ use slog_extlog::slog_test;
 #[test]
 fn test_main() {
     // Setup code
-    let (logger, mut data) = slog_test::new_test_logger();
+    let mut data = iobuffer::IoBuffer::new();
+    let logger = slog_test::new_test_logger(data.clone());
 
     // Application code
     debug!(logger, "Something happened to it";

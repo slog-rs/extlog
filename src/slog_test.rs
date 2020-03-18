@@ -4,8 +4,8 @@
 //! Helper functions for use when testing slog logs.
 //!
 //! This module is a grab-bag of tools that have been found useful when testing slog logs.
-//! A typical test will use `new_test_logger` to construct a logger and buffer,
-//! and pass that logger to the system under test. It will then exercise
+//! A typical test will create a new `iobuffer::IoBuffer`, pass it to `new_test_logger` to
+//! construct a logger, and pass that logger to the system under test. It will then exercise
 //! the system. Finally, it will use `logs_in_range` to extract the logs it is interested in
 //! in a canonical order, and test that they are as expected using standard Rust tools.
 //!
@@ -15,7 +15,8 @@
 //! use slog_extlog::slog_test;
 //!
 //! // Setup code
-//! let (logger, mut data) = slog_test::new_test_logger();
+//! let mut data = iobuffer::IoBuffer::new();
+//! let logger = slog_test::new_test_logger(data.clone());
 //!
 //! // Application code
 //! debug!(logger, "Something happened to it";
@@ -55,14 +56,10 @@ use std::sync::Mutex;
 pub type Buffer = iobuffer::IoBuffer;
 
 /// Create a new test logger suitable for use with `read_json_values`.
-pub fn new_test_logger() -> (slog::Logger, Buffer) {
-    let data = iobuffer::IoBuffer::new();
-    (
-        slog::Logger::root(
-            slog::Fuse::new(Mutex::new(slog_json::Json::default(data.clone()))),
-            o!(),
-        ),
-        data,
+pub fn new_test_logger(data: Buffer) -> slog::Logger {
+    slog::Logger::root(
+        slog::Fuse::new(Mutex::new(slog_json::Json::default(data))),
+        o!(),
     )
 }
 
@@ -139,7 +136,8 @@ pub static TEST_LOG_INTERVAL: u64 = 5;
 pub fn create_logger_buffer(
     stats: StatDefinitions,
 ) -> (StatisticsLogger<DefaultStatisticsLogFormatter>, Buffer) {
-    let (logger, data) = new_test_logger();
+    let data = iobuffer::IoBuffer::new();
+    let logger = new_test_logger(data.clone());
 
     let logger = StatisticsLogger::new(
         logger,
@@ -326,7 +324,8 @@ mod tests {
     #[test]
     fn test_partial_write() {
         // Set up the logger.
-        let (logger, mut data) = new_test_logger();
+        let mut data = iobuffer::IoBuffer::new();
+        let logger = new_test_logger(data.clone());
 
         let (started_send, started_recv) = mpsc::channel();
         let (done_send, done_recv) = mpsc::channel();

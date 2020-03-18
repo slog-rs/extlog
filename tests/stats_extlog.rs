@@ -884,7 +884,8 @@ fn multiple_stats_defns() {
         }
     }
 
-    let (logger, mut data) = new_test_logger();
+    let mut data = iobuffer::IoBuffer::new();
+    let logger = new_test_logger(data.clone());
 
     let logger = StatisticsLogger::new(
         logger,

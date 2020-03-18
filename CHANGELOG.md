@@ -9,16 +9,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - Add comment to statics created through `define_stats` macro to prevent downstream clippy failures. Also add a `.cargo/config` turning on some common warnings (and fix up code, mainly comments).
 - `slog_test` test methods: don't panic if log is partially written in another thread, but leave partial data for next read.
-  This is a breaking change if you use `slog_test`; change
-  ```
-  let data = iobuffer::IoBuffer::new();
-  let logger = slog_test::new_test_logger(data.clone())
-  ```
-  to
-  ```
-  let (logger, mut data) = slog_test::new_test_logger();
-  ```
-  Methods `read_json_values` and `logs_in_range` now accept only an `IoBuffer`.
+  Technically this is a breaking change if you use `slog_test`, since
+  methods `new_test_logger`, `read_json_values` and `logs_in_range` now accept
+  only an `IoBuffer`. However in practice callers almost certainly passed an
+  `IoBuffer` already.
 
 ## [5.2.1]
 ### Changed
