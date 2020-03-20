@@ -22,4 +22,4 @@ proc-macro = true
 
 [dev-dependencies]
 erased-serde = "0.3"
-iobuffer = "0.1"
+iobuffer = "0.2"

@@ -335,7 +335,7 @@ mod tests {
         // value separately, so there's plenty of opportunity for reading an
         // incomplete record.
         let _ = thread::spawn(move || {
-            let _ = started_send.send(()).unwrap();
+            started_send.send(()).unwrap();
             while done_recv.try_recv().is_err() {
                 debug!(logger, "Some data";
                        "alfa" => "alpha",
