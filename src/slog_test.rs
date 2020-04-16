@@ -48,27 +48,27 @@
 pub use super::stats::*;
 
 use slog::o;
-use std::io;
 #[allow(unused_imports)] // we need this trait for lines()
 use std::io::BufRead;
 use std::sync::Mutex;
 
+/// Buffer containing log data.
+pub type Buffer = iobuffer::IoBuffer;
+
 /// Create a new test logger suitable for use with `read_json_values`.
-pub fn new_test_logger<T: io::Write + Send + 'static>(stream: T) -> slog::Logger {
+pub fn new_test_logger(data: Buffer) -> slog::Logger {
     slog::Logger::root(
-        slog::Fuse::new(Mutex::new(slog_json::Json::default(stream))),
+        slog::Fuse::new(Mutex::new(slog_json::Json::default(data))),
         o!(),
-    ) // LCOV_EXCL_LINE kcov bug?
+    )
 }
 
 /// Read all the newline-delimited JSON objects from the given stream,
 /// panicking if there is an IO error or a JSON parse error.
 /// No attempt is made to avoid reading partial lines from the stream.
-pub fn read_json_values(data: &mut dyn io::Read) -> Vec<serde_json::Value> {
-    let reader = io::BufReader::new(data);
-    let iter = reader.lines().map(move |line| {
-        serde_json::from_str::<serde_json::Value>(&line.expect("IO error"))
-            .expect("JSON parse error")
+pub fn read_json_values(data: &mut Buffer) -> Vec<serde_json::Value> {
+    let iter = data.lines().map(move |line| {
+        serde_json::from_slice::<serde_json::Value>(&line).expect("JSON parse error")
     });
     iter.collect()
 }
@@ -84,11 +84,7 @@ pub fn log_in_range(min_id: &str, max_id: &str, log: &serde_json::Value) -> bool
 
 /// Collect all logs of the indicated type (see `log_in_range`) and sort them in
 /// ascending order of log_id.
-pub fn logs_in_range(
-    min_id: &str,
-    max_id: &str,
-    data: &mut dyn io::Read,
-) -> Vec<serde_json::Value> {
+pub fn logs_in_range(min_id: &str, max_id: &str, data: &mut Buffer) -> Vec<serde_json::Value> {
     let mut v = read_json_values(data)
         .into_iter()
         .filter(|log| log_in_range(min_id, max_id, log))
@@ -135,14 +131,11 @@ pub static TEST_LOG_INTERVAL: u64 = 5;
 
 /// Common setup function.
 ///
-/// Creates a logger using the provided statistics and an `IoBuffer` so we can easily
+/// Creates a logger using the provided statistics and buffer so we can easily
 /// view the generated logs.
 pub fn create_logger_buffer(
     stats: StatDefinitions,
-) -> (
-    StatisticsLogger<DefaultStatisticsLogFormatter>,
-    iobuffer::IoBuffer,
-) {
+) -> (StatisticsLogger<DefaultStatisticsLogFormatter>, Buffer) {
     let data = iobuffer::IoBuffer::new();
     let logger = new_test_logger(data.clone());
 
@@ -318,4 +311,49 @@ pub fn check_expected_stat_snapshots(
     }
 
     assert_eq!(stats.len(), expected_stats.len());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use slog::debug;
+    use std::sync::mpsc;
+    use std::thread;
+
+    /// Ensure that partial writes don't cause JSON parsing errors.
+    #[test]
+    fn test_partial_write() {
+        // Set up the logger.
+        let mut data = iobuffer::IoBuffer::new();
+        let logger = new_test_logger(data.clone());
+
+        let (started_send, started_recv) = mpsc::channel();
+        let (done_send, done_recv) = mpsc::channel();
+
+        // In a separate thread, repeatedly write JSON values until
+        // told to stop. There are lots of fields, and serde `write()`s each
+        // value separately, so there's plenty of opportunity for reading an
+        // incomplete record.
+        let _ = thread::spawn(move || {
+            started_send.send(()).unwrap();
+            while done_recv.try_recv().is_err() {
+                debug!(logger, "Some data";
+                       "alfa" => "alpha",
+                       "bravo" => "beta",
+                       "charlie" => "gamma",
+                       "delta" => "delta",
+                       "echo" => "epsilon");
+            }
+        });
+
+        // Wait until the thread has started.
+        started_recv.recv().unwrap();
+
+        // Now try to read some values. This should not fail with a parse
+        // error.
+        let _ = read_json_values(&mut data);
+
+        // Tell the daemon thread to stop so as not to leak CPU/memory.
+        done_send.send(()).unwrap();
+    }
 }

@@ -25,14 +25,10 @@
 //! [`slog-extlog-derive`]: ../../slog_extlog_derive/index.html
 //! [`StatisticsLogger`]: ./struct.StatisticsLogger.html
 
-use futures;
-use tokio_core;
-use tokio_timer;
-
-use self::futures::stream::Stream;
-use self::futures::Future;
-use self::tokio_core::reactor::{Core, Handle};
-use self::tokio_timer::Timer;
+use futures::stream::Stream;
+use futures::Future;
+use tokio_core::reactor::{Core, Handle};
+use tokio_timer::Timer;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;

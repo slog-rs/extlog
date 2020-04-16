@@ -6,7 +6,6 @@
 //! doc-tests. This should be removed once that is fixed.
 //! See https://github.com/kennytm/cargo-kcov/issues/15
 
-use iobuffer;
 use serde_json::json;
 
 use slog::debug;
