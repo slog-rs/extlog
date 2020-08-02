@@ -43,7 +43,7 @@
 //!           corresponding [`StatDefinition`](../slog_extlog/stats/struct.StatDefinition.html).
 //!   - `Action` (mandatory) - one of: `Incr`, `Decr`, and `SetVal`, depending on whether this
 //!        change triggers an increment, decrement, or set to an explicit value.
-//!   - `Condition` (optional) - A condition, absed on the log fields, for this stat to be changed.
+//!   - `Condition` (optional) - A condition, based on the log fields, for this stat to be changed.
 //!      if not set, the stat is changed on every log.  The value of this parameter is an
 //!        expression that returns a Boolean, and can use `self` for the current log object.
 //!   - `Value` or `ValueFrom` - The value to increment/decrement/set.  One and only one
@@ -160,6 +160,7 @@
 extern crate quote;
 
 use proc_macro::TokenStream;
+use proc_macro2;
 use slog::Level;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -206,17 +207,14 @@ struct StatTriggerData {
 /// Do not call this function directly.  Use `#[derive]` instead.
 #[proc_macro_derive(SlogValue)]
 pub fn slog_value(input: TokenStream) -> TokenStream {
-    // Construct a string representation of the type definition
-    let s = input.to_string();
-
-    // Parse the string representation
-    let ast = syn::parse_derive_input(&s).unwrap();
+    // Parse the type definition.
+    let ast = syn::parse(input).unwrap();
 
     // Build the impl
     let gen = impl_value_traits(&ast);
 
     // Return the generated impl
-    gen.parse().unwrap()
+    TokenStream::from(gen)
 }
 
 /// Generate implementations of the [`ExtLoggable`](../slog_extlog/trait.ExtLoggable.html) trait.
@@ -227,26 +225,27 @@ pub fn slog_value(input: TokenStream) -> TokenStream {
     attributes(LogDetails, FixedFields, StatTrigger, StatGroup, BucketBy)
 )]
 pub fn loggable(input: TokenStream) -> TokenStream {
-    // Construct a string representation of the type definition
-    let s = input.to_string();
-
-    // Parse the string representation
-    let ast = syn::parse_derive_input(&s).unwrap();
+    // Parse the type definition.
+    let ast = syn::parse(input).unwrap();
 
     // Build the impl
     let gen = impl_loggable(&ast);
 
     // Return the generated impl
-    gen.parse().unwrap()
+    TokenStream::from(gen)
 }
 
 // Actually build impls of Value and SerdeValue.
-fn impl_value_traits(ast: &syn::DeriveInput) -> quote::Tokens {
+fn impl_value_traits(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
     let name = &ast.ident;
-    let lifetimes = &ast.generics.lifetimes;
-    let ty_params = &ast.generics.ty_params;
+    // Need several copies of the lifetimes to avoid using moved values in the macro.
+    let lifetimes = ast.generics.lifetimes();
+    let lifetimes_2 = ast.generics.lifetimes();
+    let lifetimes_3 = ast.generics.lifetimes();
+    let lifetimes_4 = ast.generics.lifetimes();
+    let ty_params: Vec<_> = ast.generics.type_params().collect();
 
-    let (tys, bounds) = get_types_bounds(ty_params);
+    let (tys, bounds) = get_types_bounds(&ty_params);
     // Tedious clones so we can iterate over them in quote macros multiple times.
     let tys_2 = tys.clone();
     let tys_3 = tys.clone();
@@ -258,7 +257,7 @@ fn impl_value_traits(ast: &syn::DeriveInput) -> quote::Tokens {
     // Generate implementations of slog::Value and slog::SerdeValue, for the purposes of
     // serialization.
     quote! {
-        impl <#(#lifetimes,)* #(#tys),*> slog::SerdeValue for #name<#(#lifetimes,)* #(#tys_2),*>
+        impl <#(#lifetimes,)* #(#tys),*> slog::SerdeValue for #name<#(#lifetimes_2,)* #(#tys_2),*>
             #(where #tys_3: #(#bounds + )* serde::Serialize + slog::Value),*  {
 
             /// Convert into a serde object.
@@ -275,7 +274,7 @@ fn impl_value_traits(ast: &syn::DeriveInput) -> quote::Tokens {
             }
         }
 
-        impl<#(#lifetimes,)* #(#tys_4),*> slog::Value for #name<#(#lifetimes,)* #(#tys_5),*>
+        impl<#(#lifetimes_3,)* #(#tys_4),*> slog::Value for #name<#(#lifetimes_4,)* #(#tys_5),*>
             #(where #tys_6: #(#bounds2 + )* slog::Value),* {
             fn serialize(&self,
                          _record: &slog::Record,
@@ -288,9 +287,9 @@ fn impl_value_traits(ast: &syn::DeriveInput) -> quote::Tokens {
     }
 }
 
-fn get_types_bounds(
-    ty_params: &[syn::TyParam],
-) -> (Vec<&syn::Ident>, Vec<Vec<&syn::PolyTraitRef>>) {
+fn get_types_bounds<'a>(
+    ty_params: &[&'a syn::TypeParam],
+) -> (Vec<&'a syn::Ident>, Vec<Vec<&'a syn::TraitBound>>) {
     let tys: Vec<&syn::Ident> = ty_params.iter().map(|param| &param.ident).collect();
     let bounds = ty_params
         .iter()
@@ -298,7 +297,7 @@ fn get_types_bounds(
             p.bounds
                 .iter()
                 .filter_map(|t| {
-                    if let syn::TyParamBound::Trait(ref tr, _) = *t {
+                    if let syn::TypeParamBound::Trait(ref tr) = *t {
                         Some(tr)
                     } else {
                         None
@@ -311,14 +310,17 @@ fn get_types_bounds(
     (tys, bounds)
 }
 
-fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
+fn impl_stats_trigger(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
     // Get stat triggering details.
     let triggers = ast
         .attrs
         .iter()
-        .filter(|a| a.name() == "StatTrigger")
-        .map(|ref val| match val.value {
-            syn::MetaItem::List(_, ref v) => parse_stat_trigger(v, &ast.body),
+        .filter(|a| a.path.is_ident("StatTrigger"))
+        .map(|a| match a.parse_meta() {
+            Ok(syn::Meta::List(metalist)) => {
+                let nested = metalist.nested.iter();
+                parse_stat_trigger(nested, &ast.data)
+            }
             _ => panic!("Invalid format for #[StatTrigger(attr=\"val\")]"),
         })
         .collect::<Vec<_>>();
@@ -427,20 +429,21 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     };
 
     let name = &ast.ident;
-    let lifetimes = &ast.generics.lifetimes;
-    let ty_params = &ast.generics.ty_params;
+    let lifetimes = ast.generics.lifetimes();
+    let lifetimes_2 = ast.generics.lifetimes();
+    let ty_params: Vec<_> = ast.generics.type_params().collect();
 
-    let (tys, bounds) = get_types_bounds(ty_params);
+    let (tys, bounds) = get_types_bounds(&ty_params);
     let tys_2 = tys.clone();
     let tys_3 = tys.clone();
 
     // Create a new identifier for the list of stats, so we can make the list globally static.
-    let stat_ids_name = syn::Ident::from(format!("STATS_LIST_{}", name).to_uppercase());
+    let stat_ids_name = format_ident!("STATS_LIST_{}", name.to_string().to_uppercase());
 
     quote! {
         static #stat_ids_name: &'static [slog_extlog::stats::StatDefinitionTagged] = &[#(#stat_ids),*];
         impl<#(#lifetimes,)* #(#tys),*> slog_extlog::stats::StatTrigger
-            for #name<#(#lifetimes,)* #(#tys_2),*>
+            for #name<#(#lifetimes_2,)* #(#tys_2),*>
         #(where #tys_3: #(#bounds + )* slog::Value),*{
 
             fn stat_list(
@@ -496,12 +499,13 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> quote::Tokens {
     }
 }
 
-fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
+fn impl_loggable(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
     let name = &ast.ident;
-    let lifetimes = &ast.generics.lifetimes;
-    let ty_params = &ast.generics.ty_params;
+    let lifetimes = ast.generics.lifetimes();
+    let lifetimes_2 = ast.generics.lifetimes();
+    let ty_params: Vec<_> = ast.generics.type_params().collect();
 
-    let (tys, bounds) = get_types_bounds(ty_params);
+    let (tys, bounds) = get_types_bounds(&ty_params);
     let tys_2 = tys.clone();
     let tys_3 = tys.clone();
 
@@ -509,13 +513,16 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     let vals = ast
         .attrs
         .iter()
-        .filter(|a| a.name() == "LogDetails")
+        .filter(|a| a.path.is_ident("LogDetails"))
         .collect::<Vec<_>>();
     if vals.len() != 1 {
         panic!("Unable to find LogDetails attribute, or multiple LogDetails supplied")
     }
-    let (level, text, id) = match vals[0].value {
-        syn::MetaItem::List(_, ref v) => parse_log_details(v),
+    let (level, text, id) = match vals[0].parse_meta() {
+        Ok(syn::Meta::List(metalist)) => {
+            let nested: Vec<_> = metalist.nested.iter().collect();
+            parse_log_details(&nested)
+        }
         _ => panic!("Invalid format for #[LogDetails(id, level, text)]"),
     };
 
@@ -523,13 +530,19 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     let fields = ast
         .attrs
         .iter()
-        .filter(|a| a.name() == "FixedFields")
-        .flat_map(|ref val| match val.value {
-            syn::MetaItem::List(_, ref v) => v.iter().map(parse_fixed_field),
-            _ => panic!("Invalid format for #[FixedFields(key = value)]"),
-        })
-        .map(|(key, value)| quote!( #key => #value ))
-        .collect::<Vec<_>>();
+        .filter(|a| a.path.is_ident("FixedFields"))
+        .flat_map(|val| {
+            let meta = val.parse_meta();
+            match meta {
+                Ok(syn::Meta::List(metalist)) => metalist
+                    .nested
+                    .iter()
+                    .map(|attr_val| parse_fixed_field(attr_val))
+                    .map(|(key, value)| quote!( #key => #value ))
+                    .collect::<Vec<_>>(),
+                _ => panic!("Invalid format for #[FixedFields(key = value)]"),
+            }
+        });
 
     // Implement the relevant traits for the structure parameters to be used as key-value pairs.
     let kv_gen = impl_value_traits(ast);
@@ -561,7 +574,7 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
     // Write out the implementation of ExtLoggable.
     quote! {
         impl<#(#lifetimes,)* #(#tys),*> slog_extlog::ExtLoggable
-            for #name<#(#lifetimes,)* #(#tys_2),*>
+            for #name<#(#lifetimes_2,)* #(#tys_2),*>
         #(where #tys_3: #(#bounds + )* slog::Value),*{
 
             fn ext_log<T>(&self, logger: &slog_extlog::stats::StatisticsLogger<T>)
@@ -582,7 +595,7 @@ fn impl_loggable(ast: &syn::DeriveInput) -> quote::Tokens {
 }
 
 // Parses the LogDetails attribute.
-fn parse_log_details(attr_val: &[syn::NestedMetaItem]) -> (Level, String, u64) {
+fn parse_log_details(attr_val: &[&syn::NestedMeta]) -> (Level, String, u64) {
     if attr_val.len() != 3 {
         panic!("Must have exactly 3 parameters for LogDetails - ID, level, text")
     }
@@ -600,12 +613,12 @@ fn parse_log_details(attr_val: &[syn::NestedMetaItem]) -> (Level, String, u64) {
             //
             // This branch of code will ensure that Id, Text and Level end up as as Some(value) if
             // one was provided.
-            syn::NestedMetaItem::MetaItem(syn::MetaItem::NameValue(ref name, ref val)) => {
+            syn::NestedMeta::Meta(syn::Meta::NameValue(ref name_value)) => {
                 // Check for one of the three keys we care about - Id, Text, Level.
-                if *name == syn::Ident::new("Id") {
+                if name_value.path.is_ident("Id") {
                     // The ID must parse to a valid unsigned integer.
-                    id = match *val {
-                        syn::Lit::Str(ref s, _) => Some(s.parse::<u64>().expect(
+                    id = match name_value.lit {
+                        syn::Lit::Str(ref s) => Some(s.value().parse::<u64>().expect(
                             "Invalid format for LogDetails - Id attribute must be an \
                              unsigned integer",
                         )),
@@ -614,9 +627,10 @@ fn parse_log_details(attr_val: &[syn::NestedMetaItem]) -> (Level, String, u64) {
                              string-quoted unsigned integer"
                         ),
                     };
-                } else if *name == syn::Ident::new("Level") {
-                    level = match *val {
-                        syn::Lit::Str(ref s, _) => {
+                } else if name_value.path.is_ident("Level") {
+                    level = match name_value.lit {
+                        syn::Lit::Str(ref s) => {
+                            let s = s.value();
                             // Level must be a valid slog::Level.  Generate an error if not.
                             Some(
                                 // We handle "Warning" specially - Level::from_str *used* to
@@ -636,10 +650,10 @@ fn parse_log_details(attr_val: &[syn::NestedMetaItem]) -> (Level, String, u64) {
                              string-quoted slog::Level"
                         ),
                     };
-                } else if *name == syn::Ident::new("Text") {
-                    text = match *val {
+                } else if name_value.path.is_ident("Text") {
+                    text = match name_value.lit {
                         // Text has no restrictions other than being a string literal.
-                        syn::Lit::Str(ref s, _) => Some(s.clone()),
+                        syn::Lit::Str(ref s) => Some(s.value().clone()),
                         _ => panic!(
                             "Invalid format for LogDetails - Text attribute must be a \
                              string literal"
@@ -662,12 +676,22 @@ fn parse_log_details(attr_val: &[syn::NestedMetaItem]) -> (Level, String, u64) {
 }
 
 // Parses the FixedField attribute.
-fn parse_fixed_field(attr_val: &syn::NestedMetaItem) -> (&str, &str) {
+fn parse_fixed_field(attr_val: &syn::NestedMeta) -> (String, String) {
     match *attr_val {
         // Attributes can have many forms.  We expect these to be NameValue,
         // of the form name="val".  Anything else is invalid.
-        syn::NestedMetaItem::MetaItem(ref item) => match *item {
-            syn::MetaItem::NameValue(_, syn::Lit::Str(ref s, _)) => (item.name(), s),
+        syn::NestedMeta::Meta(ref item) => match *item {
+            syn::Meta::NameValue(ref name_value) => {
+                let ident = name_value
+                    .path
+                    .get_ident()
+                    .expect("Invalid format for FixedFields");
+                if let syn::Lit::Str(ref s) = name_value.lit {
+                    (ident.to_string(), s.value())
+                } else {
+                    panic!("Invalid format for FixedFields - value must be a string");
+                }
+            }
             _ => panic!("Invalid format for FixedFields - value must be a string"),
         },
         _ => panic!("Invalid format for FixedFields - parameters must be key-value pairs"),
@@ -676,15 +700,18 @@ fn parse_fixed_field(attr_val: &syn::NestedMetaItem) -> (&str, &str) {
 
 // Check whether a field's attributes include  "StatName = <id>"
 fn is_attr_stat_id(attr: &syn::Attribute, id: &syn::Ident) -> bool {
-    match attr.value {
+    match attr.parse_meta() {
         // We only care about the case where this is a list of key-value type attributes.
-        syn::MetaItem::List(_, ref list) => list.iter().any(|inner| {
-            if let syn::NestedMetaItem::MetaItem(ref item) = *inner {
+        Ok(syn::Meta::List(ref list)) => list.nested.iter().any(|inner| {
+            if let syn::NestedMeta::Meta(ref item) = *inner {
                 match *item {
-                    syn::MetaItem::NameValue(_, syn::Lit::Str(ref val, _)) => {
-                        let parsed_val = syn::parse_ident(val)
-                            .expect("Could not parse StatGroup(StatName) as an identifier");
-                        item.name() == "StatName" && parsed_val == id
+                    syn::Meta::NameValue(ref name_value) => {
+                        if let syn::Lit::Str(ref s) = name_value.lit {
+                            let parsed_value = format_ident!("{}", s.value());
+                            name_value.path.is_ident("StatName") && &parsed_value == id
+                        } else {
+                            false
+                        }
                     }
                     _ => false,
                 }
@@ -697,7 +724,10 @@ fn is_attr_stat_id(attr: &syn::Attribute, id: &syn::Ident) -> bool {
 }
 
 // Parses the StatTrigger attribute.
-fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> StatTriggerData {
+fn parse_stat_trigger<'a, T>(attr_val: T, body: &syn::Data) -> StatTriggerData
+where
+    T: Iterator<Item = &'a syn::NestedMeta>,
+{
     let mut id = None;
     let mut cond = None;
     let mut action = None;
@@ -708,36 +738,47 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
         let (name, val) = match *attr {
             // Attributes can have many forms.  We expect these to be NameValue,
             // of the form name="val".  Anything else is invalid.
-            syn::NestedMetaItem::MetaItem(ref item) => match *item {
-                syn::MetaItem::NameValue(_, syn::Lit::Str(ref val, _)) => (item.name(), val),
+            syn::NestedMeta::Meta(ref item) => match *item {
+                syn::Meta::NameValue(ref name_value) => {
+                    let ident = name_value
+                        .path
+                        .get_ident()
+                        .expect("Invalid format for StatTrigger");
+                    if let syn::Lit::Str(ref s) = name_value.lit {
+                        (ident.to_string(), s.value())
+                    } else {
+                        panic!("Invalid format for StatTrigger - value must be a string");
+                    }
+                }
                 _ => panic!("Invalid format for StatTrigger - value must be a string"),
             },
             _ => panic!("Invalid format for StatTrigger - parameters must be key-value pairs"),
         };
 
-        match name {
-            "StatName" => {
-                id = Some(syn::parse_ident(val).expect("Could not parse name in StatTrigger"))
+        match &name.as_ref() {
+            &"StatName" => id = Some(format_ident!("{}", val)),
+            &"Condition" => {
+                let token_stream: TokenStream = val.parse().unwrap();
+                cond = Some(
+                    syn::parse(token_stream).expect("Could not parse condition in StatTrigger"),
+                );
             }
-            "Condition" => {
-                cond = Some(syn::parse_expr(val).expect("Could not parse condition in StatTrigger"))
-            }
-            "Action" => {
+            &"Action" => {
                 action =
-                    Some(StatTriggerAction::from_str(val).expect("Invalid Action in StatTrigger"))
+                    Some(StatTriggerAction::from_str(&val).expect("Invalid Action in StatTrigger"))
             }
-            "Value" => {
+            &"Value" => {
                 value = Some(StatTriggerValue::Fixed(
                     val.parse::<i64>().expect("Invalid Value in StatTrigger"),
                 ))
             }
-
-            "ValueFrom" => {
+            &"ValueFrom" => {
+                let token_stream: TokenStream = val.parse().unwrap();
                 value = Some(StatTriggerValue::Expr(
-                    syn::parse_expr(val).expect("Invalid ValueFrom in StatTrigger"),
-                ))
+                    syn::parse(token_stream).expect("Invalid ValueFrom in StatTrigger"),
+                ));
             }
-            "FixedGroups" => {
+            &"FixedGroups" => {
                 // Split the value
                 let groups = val.split(',');
                 for group in groups {
@@ -752,13 +793,14 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
     }
 
     let id = id.expect("StatTrigger missing value for StatName");
-    let field_groups = if let syn::Body::Struct(syn::VariantData::Struct(ref fields)) = *body {
-        fields
+    let field_groups = if let syn::Data::Struct(ref data_struct) = *body {
+        data_struct
+            .fields
             .iter()
             .filter(|f| {
                 f.attrs
                     .iter()
-                    .any(|a| a.name() == "StatGroup" && is_attr_stat_id(a, &id))
+                    .any(|a| a.path.is_ident("StatGroup") && is_attr_stat_id(a, &id))
             })
             .map(|f| f.clone().ident.expect("No identifier for field!"))
             .collect::<Vec<_>>()
@@ -766,13 +808,14 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
         vec![]
     };
 
-    let bucket_field = if let syn::Body::Struct(syn::VariantData::Struct(ref all_fields)) = *body {
-        let bucket_by_fields = all_fields
+    let bucket_field = if let syn::Data::Struct(ref data_struct) = *body {
+        let bucket_by_fields = data_struct
+            .fields
             .iter()
             .filter(|f| {
                 f.attrs
                     .iter()
-                    .any(|a| a.name() == "BucketBy" && is_attr_stat_id(a, &id))
+                    .any(|a| a.path.is_ident("BucketBy") && is_attr_stat_id(a, &id))
             })
             .map(|f| f.clone().ident.expect("No identifier for field!"))
             .collect::<Vec<_>>();
@@ -788,9 +831,8 @@ fn parse_stat_trigger(attr_val: &[syn::NestedMetaItem], body: &syn::Body) -> Sta
 
     StatTriggerData {
         id,
-        // If no condition is provided, default to always passing.  Unwrap is OK here as we are
-        // parsing a literal!
-        condition_body: cond.unwrap_or_else(|| syn::parse_expr("true").unwrap()),
+        // If no condition is provided, default to always passing.
+        condition_body: cond.unwrap_or_else(|| syn::parse_quote!(true)),
         action: action.expect("StatTrigger missing value for Action"),
         val: value.expect("StatTrigger missing value for Value or ValueFrom"),
         fixed_groups,
