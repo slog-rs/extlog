@@ -4,7 +4,7 @@
 #![allow(missing_docs)]
 
 use serde::Serialize;
-use tokio_core::reactor::Core;
+use tokio::runtime::Runtime;
 
 use bencher::Bencher;
 use slog_extlog::stats::*;
@@ -68,13 +68,13 @@ struct FourthExternalLog {
 //LCOV_EXCL_STOP
 
 fn setup_logger() -> StatisticsLogger<DefaultStatisticsLogFormatter> {
-    // Use the same tokio core for speed.
-    let core = Core::new().expect("Failed to initialize tokio core");
+    // Use the same tokio runtime for speed.
+    let runtime = Runtime::new().expect("Failed to initialize tokio runtime");
     StatisticsLogger::new(
         slog::Logger::root(slog::Discard, slog::o!()),
         StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
             .with_stats(vec![SLOG_TEST_STATS])
-            .with_core(core.handle())
+            .with_runtime(runtime.handle().clone())
             .fuse(), // LCOV_EXCL_LINE Kcov bug?
     )
 }
