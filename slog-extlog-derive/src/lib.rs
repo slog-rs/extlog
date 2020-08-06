@@ -755,30 +755,30 @@ where
             _ => panic!("Invalid format for StatTrigger - parameters must be key-value pairs"),
         };
 
-        match &name.as_ref() {
-            &"StatName" => id = Some(format_ident!("{}", val)),
-            &"Condition" => {
+        match name.as_ref() {
+            "StatName" => id = Some(format_ident!("{}", val)),
+            "Condition" => {
                 let token_stream: TokenStream = val.parse().unwrap();
                 cond = Some(
                     syn::parse(token_stream).expect("Could not parse condition in StatTrigger"),
                 );
             }
-            &"Action" => {
+            "Action" => {
                 action =
                     Some(StatTriggerAction::from_str(&val).expect("Invalid Action in StatTrigger"))
             }
-            &"Value" => {
+            "Value" => {
                 value = Some(StatTriggerValue::Fixed(
                     val.parse::<i64>().expect("Invalid Value in StatTrigger"),
                 ))
             }
-            &"ValueFrom" => {
+            "ValueFrom" => {
                 let token_stream: TokenStream = val.parse().unwrap();
                 value = Some(StatTriggerValue::Expr(
                     syn::parse(token_stream).expect("Invalid ValueFrom in StatTrigger"),
                 ));
             }
-            &"FixedGroups" => {
+            "FixedGroups" => {
                 // Split the value
                 let groups = val.split(',');
                 for group in groups {
