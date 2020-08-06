@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 - Update to 1.0 versions of `syn` and `quote`
+- Update to `tokio` 0.2 and `futures` 0.3
 
 ## [5.3.0]
 ### Changed
