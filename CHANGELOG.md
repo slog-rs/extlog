@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Update to `tokio` 0.2 and `futures` 0.3
+
 ## [5.3.0]
 ### Changed
 - `slog_test` test methods: don't panic if log is partially written in another thread, but leave partial data for next read.

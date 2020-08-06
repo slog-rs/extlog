@@ -25,10 +25,8 @@
 //! [`slog-extlog-derive`]: ../../slog_extlog_derive/index.html
 //! [`StatisticsLogger`]: ./struct.StatisticsLogger.html
 
-use futures::stream::Stream;
-use futures::Future;
-use tokio_core::reactor::{Core, Handle};
-use tokio_timer::Timer;
+use futures::future;
+use futures::stream::StreamExt;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -40,6 +38,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread;
 use std::time::Duration;
+use tokio::runtime::{Handle, Runtime};
 
 use slog::info;
 
@@ -502,7 +501,7 @@ where
     /// The list of statistics to track.  This MUST be created using the
     /// [`define_stats`](../macro.define_stats.html) macro.
     pub stats: Vec<StatDefinitions>,
-    /// The [`tokio` reactor core](../tokio_core/reactor/struct.Core.html) to run the stats logging
+    /// The [`tokio` runtime](../tokio/runtime/struct.Runtime.html) to run the stats logging
     /// on, if the user is using `tokio` already.
     /// If this is `None` (the default), then a new core is created for logging stats.
     pub handle: Option<Handle>,
@@ -581,7 +580,7 @@ impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
     /// Set the Tokio reactor core to use for the logging of the statistics.
     // LCOV_EXCL_START No testing for this directly - simple code and a pain to
     // create tokio setups in UT.
-    pub fn with_core(mut self, handle: Handle) -> Self {
+    pub fn with_runtime(mut self, handle: Handle) -> Self {
         self.cfg.handle = Some(handle);
         self
     }
@@ -732,25 +731,31 @@ where
 
         // Kick off a timer to repeatedly log stats, if requested.
         if let Some(interval) = cfg.interval_secs {
-            let timer = Timer::default()
-                .interval(Duration::from_secs(interval))
-                .for_each(move |_| {
-                    timer_full_logger.tracker.log_all(&timer_full_logger);
-                    Ok(())
-                });
+            let make_timer = move || {
+                // The first tick completes immediately, so we skip it.
+                tokio::time::interval(Duration::from_secs(interval))
+                    .skip(1)
+                    .for_each(move |_| {
+                        timer_full_logger.tracker.log_all(&timer_full_logger);
+                        future::ready(())
+                    })
+            };
             match cfg.handle {
                 Some(h) => {
                     // LCOV_EXCL_START
-                    // This isn't covered in tests due to the pain of generating our own cores.
+                    // This isn't covered in tests due to the pain of generating our own runtimes.
                     // This code is simple enough it's unlikely to be bugged and will be well
                     // exercised by many users of the library.
-                    h.spawn(timer.map_err(|_| ()));
+                    let timer = h.enter(make_timer);
+                    h.spawn(timer);
                     // LCOV_EXCL_STOP
                 }
                 None => {
                     thread::spawn(|| {
-                        let mut core = Core::new().expect("Failed to initialize tokio core");
-                        core.run(timer).unwrap()
+                        let mut runtime =
+                            Runtime::new().expect("Failed to initialize tokio runtime");
+                        let timer = runtime.enter(make_timer);
+                        runtime.block_on(timer)
                     }); // LCOV_EXCL_LINE Kcov bug
                 }
             }
