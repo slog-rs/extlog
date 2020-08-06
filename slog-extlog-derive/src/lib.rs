@@ -724,10 +724,10 @@ fn is_attr_stat_id(attr: &syn::Attribute, id: &syn::Ident) -> bool {
 }
 
 // Parses the StatTrigger attribute.
-fn parse_stat_trigger<'a, T>(attr_val: T, body: &syn::Data) -> StatTriggerData
-where
-    T: Iterator<Item = &'a syn::NestedMeta>,
-{
+fn parse_stat_trigger<'a>(
+    attr_val: impl Iterator<Item = &'a syn::NestedMeta>,
+    body: &syn::Data,
+) -> StatTriggerData {
     let mut id = None;
     let mut cond = None;
     let mut action = None;
