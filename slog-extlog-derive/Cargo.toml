@@ -15,7 +15,7 @@ proc-macro2 = "1.0.19"
 slog = { version = "2.4", features = ['nested-values'] }
 syn = {version = "1.0.36", features = ["full"] }
 quote = "1.0.7"
-slog-extlog = { version = "5", path = ".." }
+slog-extlog = { version = "6", path = ".." }
 serde = {version = "1.0", features = ["derive"] }
 
 [lib]
