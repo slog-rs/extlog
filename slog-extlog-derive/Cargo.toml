@@ -1,6 +1,6 @@
 [package]
 name = "slog-extlog-derive"
-version = "6.0.0"
+version = "6.0.1"
 authors = ["Metaswitch Networks Ltd"]
 license = "Apache-2.0"
 description = "Custom derive code for slog-extlog"

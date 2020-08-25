@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Fixed
 
+## [6.0.1]
+
+### Fixed
+Correct dependency between derive and main crate
+
 ## [6.0.0]
 
 ### Changed
