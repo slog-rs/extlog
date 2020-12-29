@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+- Update to `tokio` 1.0
+
 ### Added
 
 ### Fixed

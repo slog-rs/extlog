@@ -25,8 +25,6 @@
 //! [`slog-extlog-derive`]: ../../slog_extlog_derive/index.html
 //! [`StatisticsLogger`]: ./struct.StatisticsLogger.html
 
-use futures::future;
-use futures::stream::StreamExt;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -730,15 +728,16 @@ where
         };
 
         // Kick off a timer to repeatedly log stats, if requested.
-        if let Some(interval) = cfg.interval_secs {
-            let make_timer = move || {
+        if let Some(interval_secs) = cfg.interval_secs {
+            let timer = async move {
                 // The first tick completes immediately, so we skip it.
-                tokio::time::interval(Duration::from_secs(interval))
-                    .skip(1)
-                    .for_each(move |_| {
-                        timer_full_logger.tracker.log_all(&timer_full_logger);
-                        future::ready(())
-                    })
+                let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+                interval.tick().await;
+
+                loop {
+                    interval.tick().await;
+                    timer_full_logger.tracker.log_all(&timer_full_logger);
+                }
             };
             match cfg.handle {
                 Some(h) => {
@@ -746,15 +745,14 @@ where
                     // This isn't covered in tests due to the pain of generating our own runtimes.
                     // This code is simple enough it's unlikely to be bugged and will be well
                     // exercised by many users of the library.
-                    let timer = h.enter(make_timer);
+                    h.enter();
                     h.spawn(timer);
                     // LCOV_EXCL_STOP
                 }
                 None => {
                     thread::spawn(|| {
-                        let mut runtime =
-                            Runtime::new().expect("Failed to initialize tokio runtime");
-                        let timer = runtime.enter(make_timer);
+                        let runtime = Runtime::new().expect("Failed to initialize tokio runtime");
+                        runtime.enter();
                         runtime.block_on(timer)
                     }); // LCOV_EXCL_LINE Kcov bug
                 }
