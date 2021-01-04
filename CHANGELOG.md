@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 
 - Update to `tokio` 1.0
+  - Breaking for users who pass in their own `tokio::runtime::Handle` to
+    `StatsConfig`, otherwise transparent.
 
 ### Added
 
