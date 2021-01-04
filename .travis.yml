@@ -16,7 +16,7 @@ before_script:
   - rustup component add clippy
 script:
 - |
-  DCO_SIGNING_BASE_COMMIT=4c9e80eb9ddb5f97e2e55c63a8cfb258897ceac5 &&
+  DCO_SIGNING_BASE_COMMIT=b00f12dc7afa4400af1289a7f69e570148ae16e5 &&
   if git log ${DCO_SIGNING_BASE_COMMIT}.. --grep "^signed-off-by: .\+@.\+" --regexp-ignore-case --invert-grep --no-merges | grep ^ ;
   then echo '**One or more commits are not signed off!' ; /bin/false ; fi
 - cargo clippy --all-targets --all-features --all -- -D warnings
