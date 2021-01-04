@@ -160,7 +160,6 @@
 extern crate quote;
 
 use proc_macro::TokenStream;
-use proc_macro2;
 use slog::Level;
 use std::collections::HashMap;
 use std::str::FromStr;
