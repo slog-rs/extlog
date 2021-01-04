@@ -187,7 +187,7 @@ impl FromStr for StatTriggerAction {
 
 enum StatTriggerValue {
     Fixed(i64),
-    Expr(syn::Expr),
+    Expr(Box<syn::Expr>),
 }
 
 // Info about a statistic trigger
