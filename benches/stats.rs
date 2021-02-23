@@ -4,8 +4,6 @@
 #![allow(missing_docs)]
 
 use serde::Serialize;
-use tokio::runtime::Runtime;
-
 use bencher::Bencher;
 use slog_extlog::stats::*;
 use slog_extlog::xlog;
@@ -68,15 +66,10 @@ struct FourthExternalLog {
 //LCOV_EXCL_STOP
 
 fn setup_logger() -> StatisticsLogger<DefaultStatisticsLogFormatter> {
-    // Use the same tokio runtime for speed.
-    let runtime = Runtime::new().expect("Failed to initialize tokio runtime");
-    StatisticsLogger::new(
-        slog::Logger::root(slog::Discard, slog::o!()),
-        StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
-            .with_stats(vec![SLOG_TEST_STATS])
-            .with_runtime(runtime.handle().clone())
-            .fuse(), // LCOV_EXCL_LINE Kcov bug?
-    )
+    StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default()
+        .with_stats(vec![SLOG_TEST_STATS])
+        .without_interval_logs()
+        .fuse(slog::Logger::root(slog::Discard, slog::o!()))
 }
 
 // Benchmark a log that increments a counter unconditionally.

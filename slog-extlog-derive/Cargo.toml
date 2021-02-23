@@ -24,3 +24,4 @@ erased-serde = "0.3"
 iobuffer = "0.2"
 serde =  { version = "1.0", features = ["derive"] }
 slog-extlog = { version = "6", path = ".." }
+tokio = { version = "1.0", features = ["macros"] }

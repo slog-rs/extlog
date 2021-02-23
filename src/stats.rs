@@ -25,7 +25,6 @@
 //! [`slog-extlog-derive`]: ../../slog_extlog_derive/index.html
 //! [`StatisticsLogger`]: ./struct.StatisticsLogger.html
 
-use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
 use std::marker::PhantomData;
@@ -34,10 +33,9 @@ use std::panic::RefUnwindSafe;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::thread;
 use std::time::Duration;
-use tokio::runtime::{Handle, Runtime};
 
+use serde::Serialize;
 use slog::info;
 
 //////////////////////////////////////////////////////
@@ -479,35 +477,6 @@ pub const DEFAULT_LOG_INTERVAL_SECS: u64 = 300;
 /// Type alias for the return of [`define_stats`](../macro.define_stats.html).
 pub type StatDefinitions = &'static [&'static (dyn StatDefinition + Sync + RefUnwindSafe)];
 
-/// Configuration required for tracking statistics.
-///
-/// This configuration should be passed to a [`StatisticsLogger`](struct.StatisticsLogger.html)
-/// to allow tracking metrics from logs.
-///
-/// Construct either with `Default::default()` for no stats at all,
-/// or else use a `StatsConfigBuilder`.
-// LCOV_EXCL_START not interesting to track automatic derive coverage
-#[derive(Debug)]
-pub struct StatsConfig<T>
-where
-    T: StatisticsLogFormatter,
-{
-    /// The period, in seconds, to log the generated metrics into the log stream.  Defaults to
-    /// 300 seconds (5 minutes).  One log will be generated for each metric value.  A value of
-    /// `None` indicates stats should never be logged.
-    pub interval_secs: Option<u64>,
-    /// The list of statistics to track.  This MUST be created using the
-    /// [`define_stats`](../macro.define_stats.html) macro.
-    pub stats: Vec<StatDefinitions>,
-    /// The [`tokio` runtime](../tokio/runtime/struct.Runtime.html) to run the stats logging
-    /// on, if the user is using `tokio` already.
-    /// If this is `None` (the default), then a new core is created for logging stats.
-    pub handle: Option<Handle>,
-    /// An object that handles formatting the individual statistic values into a log.
-    pub stat_formatter: PhantomData<T>,
-}
-// LCOV_EXCL_STOP
-
 /// A builder to allow customization of stats config.  This gives flexibility when the other
 /// methods are insufficient.
 ///
@@ -519,6 +488,8 @@ where
 ///
 /// ```
 /// # use slog_extlog::stats::*;
+/// # #[tokio::main]
+/// # async fn main() {
 ///
 /// slog_extlog::define_stats! {
 ///     MY_STATS = {
@@ -528,83 +499,99 @@ where
 /// }
 ///
 /// let full_stats = vec![MY_STATS];
-/// let cfg = StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
-///              .with_stats(full_stats)
-///              .with_log_interval(30)
-///              .fuse();
+/// let logger = slog::Logger::root(slog::Discard, slog::o!());
+/// let stats = StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default()
+///     .with_stats(full_stats)
+///     .with_log_interval(30)
+///     .fuse(logger);
+///
+/// # }
 /// ```
-pub struct StatsConfigBuilder<T: StatisticsLogFormatter> {
-    cfg: StatsConfig<T>,
+#[derive(Debug)]
+pub struct StatsLoggerBuilder<T>
+where
+    T: StatisticsLogFormatter,
+{
+    /// The period, in seconds, to log the generated metrics into the log stream.  Defaults to
+    /// 300 seconds (5 minutes).  One log will be generated for each metric value.  A value of
+    /// `None` indicates stats should never be logged.
+    pub interval_secs: Option<u64>,
+    /// The list of statistics to track.  This MUST be created using the
+    /// [`define_stats`](../macro.define_stats.html) macro.
+    pub stats: Vec<StatDefinitions>,
+    /// An object that handles formatting the individual statistic values into a log.
+    pub stat_formatter: PhantomData<T>,
 }
 
-impl<T> Default for StatsConfigBuilder<T>
+impl<T> Default for StatsLoggerBuilder<T>
 where
     T: StatisticsLogFormatter,
 {
     fn default() -> Self {
-        StatsConfigBuilder {
-            cfg: Default::default(),
-        }
-    }
-}
-
-impl<T: StatisticsLogFormatter> StatsConfigBuilder<T> {
-    /// Create a new config builder, using the given formatter.
-    ///
-    /// The formatter must be provided here as it is intrinsic to the builder.
-    pub fn new() -> Self {
-        StatsConfigBuilder {
-            cfg: StatsConfig {
-                stats: vec![],
-                stat_formatter: PhantomData,
-                handle: None,
-                interval_secs: None,
-            },
-        }
-    }
-
-    /// Set the list of statistics to track.
-    pub fn with_stats(mut self, defns: Vec<StatDefinitions>) -> Self {
-        self.cfg.stats = defns;
-        self
-    }
-
-    /// Set the logging interval.
-    pub fn with_log_interval(mut self, interval: u64) -> Self {
-        self.cfg.interval_secs = Some(interval);
-        self
-    }
-
-    /// Set the Tokio reactor core to use for the logging of the statistics.
-    // LCOV_EXCL_START No testing for this directly - simple code and a pain to
-    // create tokio setups in UT.
-    pub fn with_runtime(mut self, handle: Handle) -> Self {
-        self.cfg.handle = Some(handle);
-        self
-    }
-    // LCOV_EXCL_STOP
-
-    /// Return the built configuration.
-    pub fn fuse(self) -> StatsConfig<T> {
-        self.cfg
-    }
-}
-
-// A default `StatsDefinition` with no statistics in it.
-// Deprecated since 4.0 - just use an empty vector.
-define_stats! { EMPTY_STATS = {} }
-
-impl<F> Default for StatsConfig<F>
-where
-    F: StatisticsLogFormatter,
-{
-    fn default() -> Self {
-        StatsConfig {
+        Self {
             interval_secs: Some(DEFAULT_LOG_INTERVAL_SECS),
-            stats: vec![EMPTY_STATS],
-            handle: None,
+            stats: vec![],
             stat_formatter: PhantomData,
         }
+    }
+}
+
+impl<T: StatisticsLogFormatter> StatsLoggerBuilder<T> {
+    /// Set the list of statistics to track.
+    pub fn with_stats(mut self, defns: Vec<StatDefinitions>) -> Self {
+        self.stats = defns;
+        self
+    }
+
+    /// Enable emitting of logs on a regular interval (in seconds).
+    pub fn with_log_interval(mut self, interval_secs: u64) -> Self {
+        self.interval_secs = Some(interval_secs);
+        self
+    }
+
+    /// Disable emitting of logs on a regular interval
+    pub fn without_interval_logs(mut self) -> Self {
+        self.interval_secs = None;
+        self
+    }
+
+    /// Construct the StatisticsLogger - this will start the interval logging if requested.
+    pub fn fuse(self, logger: slog::Logger) -> StatisticsLogger<T> {
+        let mut tracker = StatsTracker::new();
+        for set in self.stats {
+            for s in set {
+                tracker.add_statistic(*s)
+            }
+        }
+
+        // Wrap the tracker in an Arc so we can pass it to the Logger and to the timer.
+        let tracker = Arc::new(tracker);
+
+        // Clone the logger and tracker for using on the timer - we may not need them,
+        // but the clones are cheap.
+        let timer_tracker = Arc::clone(&tracker);
+        let timer_logger = logger.clone();
+
+        let timer_full_logger = StatisticsLogger {
+            logger: timer_logger.clone(),
+            tracker: timer_tracker,
+        };
+
+        // Kick off a timer to repeatedly log stats, if requested.
+        if let Some(interval_secs) = self.interval_secs {
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+
+                // The first tick completes immediately, so we skip it.
+                interval.tick().await;
+
+                loop {
+                    interval.tick().await;
+                    timer_full_logger.tracker.log_all(&timer_full_logger);
+                }
+            });
+        }
+        StatisticsLogger { logger, tracker }
     }
 }
 
@@ -656,7 +643,7 @@ impl StatisticsLogFormatter for DefaultStatisticsLogFormatter {
 }
 
 /// A trait object to allow users to customise the format of stats when logged.
-pub trait StatisticsLogFormatter {
+pub trait StatisticsLogFormatter: Sync + Send + 'static {
     /// The formatting callback.  This should take the statistic information and log it through the
     /// provided logger in the relevant format.
     ///
@@ -703,64 +690,6 @@ impl<T> StatisticsLogger<T>
 where
     T: StatisticsLogFormatter + Send + Sync + 'static,
 {
-    /// Create a child logger with stats tracking support.
-    ///
-    /// The `StatsConfig` must contain the definitions necessary to generate metrics from logs.
-    pub fn new(logger: slog::Logger, cfg: StatsConfig<T>) -> StatisticsLogger<T> {
-        let mut tracker = StatsTracker::new();
-        for set in cfg.stats {
-            for s in set {
-                tracker.add_statistic(*s)
-            }
-        }
-
-        // Wrap the tracker in an Arc so we can pass it to the Logger and to the timer.
-        let tracker = Arc::new(tracker);
-
-        // Clone the logger and tracker for using on the timer - we may not need them,
-        // but the clones are cheap.
-        let timer_tracker = Arc::clone(&tracker);
-        let timer_logger = logger.clone();
-
-        let timer_full_logger = StatisticsLogger {
-            logger: timer_logger.clone(),
-            tracker: timer_tracker,
-        };
-
-        // Kick off a timer to repeatedly log stats, if requested.
-        if let Some(interval_secs) = cfg.interval_secs {
-            let timer = async move {
-                // The first tick completes immediately, so we skip it.
-                let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
-                interval.tick().await;
-
-                loop {
-                    interval.tick().await;
-                    timer_full_logger.tracker.log_all(&timer_full_logger);
-                }
-            };
-            match cfg.handle {
-                Some(h) => {
-                    // LCOV_EXCL_START
-                    // This isn't covered in tests due to the pain of generating our own runtimes.
-                    // This code is simple enough it's unlikely to be bugged and will be well
-                    // exercised by many users of the library.
-                    h.enter();
-                    h.spawn(timer);
-                    // LCOV_EXCL_STOP
-                }
-                None => {
-                    thread::spawn(|| {
-                        let runtime = Runtime::new().expect("Failed to initialize tokio runtime");
-                        runtime.enter();
-                        runtime.block_on(timer)
-                    }); // LCOV_EXCL_LINE Kcov bug
-                }
-            }
-        } // LCOV_EXCL_LINE Kcov bug
-        StatisticsLogger { logger, tracker }
-    }
-
     /// Build a child logger with new parameters.
     ///
     /// This is essentially a wrapper around `slog::Logger::new()`.
@@ -1312,11 +1241,9 @@ mod tests {
     #[test]
     // Check that loggers can be cloned even if the formatter can't.
     fn check_clone() {
-        let logger = StatisticsLogger::new(
-            slog::Logger::root(slog::Discard, slog::o!()),
-            StatsConfigBuilder::<DummyNonCloneFormatter>::new().fuse(),
-        );
-
+        let logger = StatsLoggerBuilder::<DummyNonCloneFormatter>::default()
+            .without_interval_logs()
+            .fuse(slog::Logger::root(slog::Discard, slog::o!()));
         fn is_clone<T: Clone>(_: &T) {}
         is_clone(&logger);
     }

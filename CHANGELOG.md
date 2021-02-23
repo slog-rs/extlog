@@ -9,13 +9,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
-- Update to `tokio` 1.0
-  - Breaking for users who pass in their own `tokio::runtime::Handle` to
-    `StatsConfig`, otherwise transparent.
-
-### Added
-
-### Fixed
+- `StatisticsLogger` creation API has changed:
+    - Removed `StatsConfig` and `StatsConfigBuilder`
+    - Added `StatsLoggerBuilder` with `fuse(logger)` to create the
+      `StatisticsLogger`
+    - Creating a `StatisticsLogger` must be done within a `tokio v1.0` runtime
+    - if the interval logging is enabled
+- `slog_extlog` re-exports the `#[derive(ExtLoggable)]` and
+  `#[derive(SlogValue)]` macros so no need to depend explicitly on
+  `slog_extlog_derive` any more
 
 ## [6.0.1]
 
