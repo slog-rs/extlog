@@ -124,16 +124,16 @@ struct GroupBucketCounterLog {
 }
 //LCOV_EXCL_STOP
 
-#[test]
-fn request_with_no_stats() {
-    let (logger, _) = create_logger_buffer(EMPTY_STATS);
+#[tokio::test]
+async fn request_with_no_stats() {
+    let (logger, _) = create_logger_buffer(&[]);
     let stats = logger.get_stats();
 
     assert_eq!(stats.len(), 0);
 }
 
-#[test]
-fn request_for_single_counter() {
+#[tokio::test]
+async fn request_for_single_counter() {
     static STATS: StatDefinitions = &[&test_counter];
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
@@ -154,8 +154,8 @@ fn request_for_single_counter() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_single_gauge() {
+#[tokio::test]
+async fn request_for_single_gauge() {
     static STATS: StatDefinitions = &[&test_gauge];
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
@@ -176,8 +176,8 @@ fn request_for_single_gauge() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_multiple_metrics() {
+#[tokio::test]
+async fn request_for_multiple_metrics() {
     static STATS: StatDefinitions = &[&test_counter, &test_gauge];
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
@@ -211,8 +211,8 @@ fn request_for_multiple_metrics() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_updated_metrics() {
+#[tokio::test]
+async fn request_for_updated_metrics() {
     static STATS: StatDefinitions = &[&test_counter, &test_gauge];
     let (logger, _) = create_logger_buffer(STATS);
 
@@ -250,8 +250,8 @@ fn request_for_updated_metrics() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_single_counter_with_groups_but_no_values() {
+#[tokio::test]
+async fn request_for_single_counter_with_groups_but_no_values() {
     static STATS: StatDefinitions = &[&test_grouped_counter];
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
@@ -268,8 +268,8 @@ fn request_for_single_counter_with_groups_but_no_values() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_single_gauge_with_groups_but_no_values() {
+#[tokio::test]
+async fn request_for_single_gauge_with_groups_but_no_values() {
     static STATS: StatDefinitions = &[&test_grouped_gauge];
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
@@ -286,8 +286,8 @@ fn request_for_single_gauge_with_groups_but_no_values() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_single_counter_with_groups_and_one_value() {
+#[tokio::test]
+async fn request_for_single_counter_with_groups_and_one_value() {
     static STATS: StatDefinitions = &[&test_grouped_counter];
     let (logger, _) = create_logger_buffer(STATS);
 
@@ -317,8 +317,8 @@ fn request_for_single_counter_with_groups_and_one_value() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_single_gauge_with_groups_and_one_value() {
+#[tokio::test]
+async fn request_for_single_gauge_with_groups_and_one_value() {
     static STATS: StatDefinitions = &[&test_grouped_gauge];
     let (logger, _) = create_logger_buffer(STATS);
 
@@ -348,8 +348,8 @@ fn request_for_single_gauge_with_groups_and_one_value() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_single_counter_with_groups_and_two_values() {
+#[tokio::test]
+async fn request_for_single_counter_with_groups_and_two_values() {
     static STATS: StatDefinitions = &[&test_grouped_counter];
     let (logger, _) = create_logger_buffer(STATS);
 
@@ -395,8 +395,8 @@ fn request_for_single_counter_with_groups_and_two_values() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_bucket_counter_freq() {
+#[tokio::test]
+async fn request_for_bucket_counter_freq() {
     static STATS: StatDefinitions = &[&test_bucket_counter_freq];
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
@@ -434,8 +434,8 @@ fn request_for_bucket_counter_freq() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_bucket_counter_freq_one_value() {
+#[tokio::test]
+async fn request_for_bucket_counter_freq_one_value() {
     static STATS: StatDefinitions = &[&test_bucket_counter_freq];
     let (logger, _) = create_logger_buffer(STATS);
 
@@ -476,8 +476,8 @@ fn request_for_bucket_counter_freq_one_value() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_bucket_counter_cumul_freq() {
+#[tokio::test]
+async fn request_for_bucket_counter_cumul_freq() {
     static STATS: StatDefinitions = &[&test_bucket_counter_cumul_freq];
     let (logger, _) = create_logger_buffer(STATS);
     let stats = logger.get_stats();
@@ -519,8 +519,8 @@ fn request_for_bucket_counter_cumul_freq() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_bucket_counter_with_groups_and_two_values() {
+#[tokio::test]
+async fn request_for_bucket_counter_with_groups_and_two_values() {
     static STATS: StatDefinitions = &[&test_group_bucket_counter];
     let (logger, _) = create_logger_buffer(STATS);
 
@@ -588,8 +588,8 @@ fn request_for_bucket_counter_with_groups_and_two_values() {
     ); // LCOV_EXCL_LINE Kcov bug?
 }
 
-#[test]
-fn request_for_many_metrics() {
+#[tokio::test]
+async fn request_for_many_metrics() {
     let (logger, _) = create_logger_buffer(ALL_STATS);
 
     xlog!(logger, CounterUpdateLog { delta: 1 });

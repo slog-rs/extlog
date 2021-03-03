@@ -8,22 +8,22 @@ use slog::o;
 use slog_extlog::xlog;
 use slog_extlog_derive::{ExtLoggable, SlogValue};
 
-use slog::Logger;
 use slog_extlog::slog_test;
-use slog_extlog::DefaultLogger;
+use slog_extlog::{stats::StatsLoggerBuilder, DefaultLogger};
 use std::str;
 
 const CRATE_LOG_NAME: &str = "SLOGTST";
 
 // Helper to create a logger and matching Ring buffer to store them.
-fn create_logger(testname: &'static str) -> (Logger, iobuffer::IoBuffer) {
+fn create_logger(testname: &'static str) -> (DefaultLogger, iobuffer::IoBuffer) {
     let data = iobuffer::IoBuffer::new();
     let logger = slog_test::new_test_logger(data.clone()).new(o!("testname" => testname));
+    let logger = StatsLoggerBuilder::default().fuse(logger);
     (logger, data)
 }
 
-#[test]
-fn test_basic_log() {
+#[tokio::test]
+async fn test_basic_log() {
     // Create a basic log, generate it, and ensure the correct fields come through.
     //
     // The "Id" parameter becomes "log_id" (appended to the `CRATE_NAME`), the "Text" becomes
@@ -33,7 +33,6 @@ fn test_basic_log() {
     struct BasicLog;
 
     let (logger, mut data) = create_logger("basic_log");
-    let logger = DefaultLogger::new(logger, Default::default());
     xlog!(logger, BasicLog);
     let logs = slog_test::read_json_values(&mut data);
     assert_eq!(logs.len(), 1);
@@ -42,8 +41,8 @@ fn test_basic_log() {
     assert_eq!(logs[0]["level"], "WARN");
 }
 
-#[test]
-fn test_derived_structs() {
+#[tokio::test]
+async fn test_derived_structs() {
     // LCOV_EXCL_START not interesting to track automatic derive coverage
     #[derive(Debug, Clone, Serialize, SlogValue)]
     struct FooData {
@@ -68,13 +67,12 @@ fn test_derived_structs() {
     // LCOV_EXCL_STOP
 
     let (logger, mut data) = create_logger("derived_structs");
-    let logger = DefaultLogger::new(logger, Default::default());
     let foo_logger = logger.new(o!("data" => FooData {
         id: 10,
         user: "Bob".to_string(),
         count: 2,
     }));
-    let foo_logger = DefaultLogger::new(foo_logger, Default::default());
+    let foo_logger: DefaultLogger = StatsLoggerBuilder::default().fuse(foo_logger);
 
     xlog!(foo_logger, FooRspRcvd(FooRspType::Ok, "Success"));
     let logs = slog_test::read_json_values(&mut data);
@@ -103,8 +101,8 @@ fn test_derived_structs() {
     assert_eq!(j2["details"][1], "Not found");
 }
 
-#[test]
-fn test_fixed_field() {
+#[tokio::test]
+async fn test_fixed_field() {
     // LCOV_EXCL_START not interesting to track automatic derive coverage
     #[derive(Debug, Clone, Serialize, ExtLoggable)]
     #[LogDetails(Id = "789", Text = "Fixed field log", Level = "Info")]
@@ -120,7 +118,6 @@ fn test_fixed_field() {
     };
 
     let (logger, mut data) = create_logger("fixed_field");
-    let logger = DefaultLogger::new(logger, Default::default());
     xlog!(logger, my_log);
 
     let logs = slog_test::read_json_values(&mut data);
@@ -139,8 +136,8 @@ fn test_fixed_field() {
     assert_eq!(j["Hello"], "World");
 }
 
-#[test]
-fn test_generics() {
+#[tokio::test]
+async fn test_generics() {
     // Currently, fields with lifetimes cannot be used as slog::Value, because we need a way to
     // convert to a static lifetime.  Can try by making FooData have a lifetime parameter for the
     // "desc" field.
@@ -160,11 +157,10 @@ fn test_generics() {
     struct FooLog<V: slog_extlog::SlogValueDerivable> {
         data: FooData,
         inner: Wrapper<V>,
-    };
+    }
     // LCOV_EXCL_STOP
 
     let (logger, mut data) = create_logger("derived_structs");
-    let logger = DefaultLogger::new(logger, Default::default());
     let foo_data = FooData {
         id: 42,
         desc: "FoobarBaz",

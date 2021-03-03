@@ -1,3 +1,4 @@
+#![cfg(feature = "interval_logging")]
 //! Extlog tests for Stats tracker.
 //!
 
@@ -7,7 +8,7 @@ use slog_extlog_derive::ExtLoggable;
 
 use serde::Serialize;
 use slog_extlog::slog_test::*;
-use std::{panic, thread, time};
+use std::{panic, time};
 
 const CRATE_LOG_NAME: &str = "SLOG_STATS_TRACKER_TEST";
 
@@ -184,7 +185,7 @@ fn log_external_grouped(
 }
 
 // Retrieves logs for a given statistic.
-fn get_stat_logs(stat_name: &'static str, mut data: &mut Buffer) -> Vec<serde_json::Value> {
+fn get_stat_logs(stat_name: &str, mut data: &mut Buffer) -> Vec<serde_json::Value> {
     logs_in_range("STATS-1", "STATS-2", &mut data)
         .iter()
         .cloned()
@@ -193,8 +194,8 @@ fn get_stat_logs(stat_name: &'static str, mut data: &mut Buffer) -> Vec<serde_js
 }
 
 // Does the work of checking that we get the expected values in our logs.
-fn check_log_fields(stat_name: &'static str, data: &mut Buffer, metric_type: &str, value: f64) {
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+async fn check_log_fields(stat_name: &str, data: &mut Buffer, metric_type: &str, value: f64) {
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
 
     let logs = get_stat_logs(stat_name, data);
     assert_eq!(logs.len(), 1);
@@ -202,20 +203,20 @@ fn check_log_fields(stat_name: &'static str, data: &mut Buffer, metric_type: &st
     assert_eq!(logs[0]["value"].as_f64(), Some(value));
 }
 
-#[test]
-fn external_logging_works() {
+#[tokio::test]
+async fn external_logging_works() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     log_external_stat(&logger, 234, 1);
 
     // Wait for the stats logs.
-    check_log_fields("test_counter", &mut data, "counter", f64::from(1));
+    check_log_fields("test_counter", &mut data, "counter", f64::from(1)).await;
 
     let logs = logs_in_range("STATS-1", "STATS-2", &mut data);
     assert_eq!(logs.len(), 0);
 }
 
-#[test]
-fn test_extloggable_gauges_with_equality_condition() {
+#[tokio::test]
+async fn test_extloggable_gauges_with_equality_condition() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
     log_external_stat(&logger, 5, 76);
@@ -224,11 +225,11 @@ fn test_extloggable_gauges_with_equality_condition() {
     xlog!(logger, SecondExternalLog { floating: 1.34 });
 
     // Wait for the stats logs.
-    check_log_fields("test_gauge", &mut data, "gauge", f64::from(1));
+    check_log_fields("test_gauge", &mut data, "gauge", f64::from(1)).await;
 }
 
-#[test]
-fn test_extloggable_field_gauges() {
+#[tokio::test]
+async fn test_extloggable_field_gauges() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
     log_external_stat(&logger, 15, 6);
@@ -238,15 +239,15 @@ fn test_extloggable_field_gauges() {
     info!(logger, "Test log"; "log_id" => "SLOG_STATS_TRACKER_TEST-1", "madeup" => 10);
 
     // Wait for the stats logs.
-    check_log_fields("test_second_gauge", &mut data, "gauge", f64::from(9));
+    check_log_fields("test_second_gauge", &mut data, "gauge", f64::from(9)).await;
 
     log_external_stat(&logger, 2, 0);
 
-    check_log_fields("test_second_gauge", &mut data, "gauge", f64::from(11));
+    check_log_fields("test_second_gauge", &mut data, "gauge", f64::from(11)).await;
 }
 
-#[test]
-fn test_extloggable_strings() {
+#[tokio::test]
+async fn test_extloggable_strings() {
     // For code coverage, test that the `with_params` method works OK.
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     let logger = logger.with_params(o!("global_name" => "foobar"));
@@ -258,11 +259,11 @@ fn test_extloggable_strings() {
         }
     );
 
-    check_log_fields("test_foo_count", &mut data, "counter", f64::from(1));
+    check_log_fields("test_foo_count", &mut data, "counter", f64::from(1)).await;
 }
 
-#[test]
-fn test_extloggable_set_to() {
+#[tokio::test]
+async fn test_extloggable_set_to() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
     xlog!(
@@ -288,11 +289,12 @@ fn test_extloggable_set_to() {
         &mut data,
         "counter",
         f64::from(42),
-    );
+    )
+    .await;
 }
 
-#[test]
-fn basic_extloggable_grouped_by_string() {
+#[tokio::test]
+async fn basic_extloggable_grouped_by_string() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
     xlog!(
@@ -333,7 +335,7 @@ fn basic_extloggable_grouped_by_string() {
     );
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_grouped_counter", &mut data);
     assert_eq!(logs.len(), 2);
 
@@ -356,8 +358,8 @@ fn basic_extloggable_grouped_by_string() {
     );
 }
 
-#[test]
-fn basic_extloggable_fixed_group() {
+#[tokio::test]
+async fn basic_extloggable_fixed_group() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
     xlog!(logger, FixedExternalLog { error: 23 });
@@ -365,7 +367,7 @@ fn basic_extloggable_fixed_group() {
     xlog!(logger, FixedExternalLog { error: 42 });
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_double_grouped", &mut data);
     assert_eq!(logs.len(), 4);
 
@@ -400,8 +402,8 @@ fn basic_extloggable_fixed_group() {
     );
 }
 
-#[test]
-fn basic_extloggable_grouped_by_mixed() {
+#[tokio::test]
+async fn basic_extloggable_grouped_by_mixed() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     log_external_grouped(&logger, "bar".to_string(), 0);
     log_external_grouped(&logger, "foo".to_string(), 2);
@@ -411,7 +413,7 @@ fn basic_extloggable_grouped_by_mixed() {
     log_external_grouped(&logger, "bar".to_string(), 1);
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_double_grouped", &mut data);
     assert_eq!(logs.len(), 5);
 
@@ -452,13 +454,13 @@ fn basic_extloggable_grouped_by_mixed() {
     );
 }
 
-#[test]
-fn test_extloggable_bucket_counter_freq() {
+#[tokio::test]
+async fn test_extloggable_bucket_counter_freq() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     xlog!(logger, FifthExternalLog { floating: 2.5 });
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_bucket_counter_freq", &mut data);
     assert_eq!(logs.len(), 5);
 
@@ -499,13 +501,13 @@ fn test_extloggable_bucket_counter_freq() {
     );
 }
 
-#[test]
-fn test_extloggable_bucket_counter_freq_high_value() {
+#[tokio::test]
+async fn test_extloggable_bucket_counter_freq_high_value() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     xlog!(logger, FifthExternalLog { floating: 10_f32 });
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_bucket_counter_freq", &mut data);
     assert_eq!(logs.len(), 5);
 
@@ -546,13 +548,13 @@ fn test_extloggable_bucket_counter_freq_high_value() {
     );
 }
 
-#[test]
-fn test_extloggable_bucket_counter_cumul_freq() {
+#[tokio::test]
+async fn test_extloggable_bucket_counter_cumul_freq() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     xlog!(logger, FifthExternalLog { floating: 2.5 });
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_bucket_counter_cumul_freq", &mut data);
     assert_eq!(logs.len(), 5);
 
@@ -593,13 +595,13 @@ fn test_extloggable_bucket_counter_cumul_freq() {
     );
 }
 
-#[test]
-fn test_extloggable_bucket_counter_cumul_freq_high_value() {
+#[tokio::test]
+async fn test_extloggable_bucket_counter_cumul_freq_high_value() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     xlog!(logger, FifthExternalLog { floating: 8_f32 });
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_bucket_counter_cumul_freq", &mut data);
     assert_eq!(logs.len(), 5);
 
@@ -640,8 +642,8 @@ fn test_extloggable_bucket_counter_cumul_freq_high_value() {
     );
 }
 
-#[test]
-fn test_extloggable_buckets_and_repeated_tags() {
+#[tokio::test]
+async fn test_extloggable_buckets_and_repeated_tags() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     xlog!(
         logger,
@@ -661,7 +663,7 @@ fn test_extloggable_buckets_and_repeated_tags() {
     );
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_bucket_counter_grouped_freq", &mut data);
     assert_eq!(logs.len(), 3);
 
@@ -690,8 +692,8 @@ fn test_extloggable_buckets_and_repeated_tags() {
     );
 }
 
-#[test]
-fn test_extloggable_bucket_counter_grouped_freq() {
+#[tokio::test]
+async fn test_extloggable_bucket_counter_grouped_freq() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     xlog!(
         logger,
@@ -711,7 +713,7 @@ fn test_extloggable_bucket_counter_grouped_freq() {
     );
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_bucket_counter_grouped_freq", &mut data);
     assert_eq!(logs.len(), 6);
 
@@ -758,8 +760,8 @@ fn test_extloggable_bucket_counter_grouped_freq() {
     );
 }
 
-#[test]
-fn test_extloggable_bucket_counter_grouped_cumul_freq() {
+#[tokio::test]
+async fn test_extloggable_bucket_counter_grouped_cumul_freq() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     xlog!(
         logger,
@@ -779,7 +781,7 @@ fn test_extloggable_bucket_counter_grouped_cumul_freq() {
     );
 
     // Wait for the stats logs.
-    thread::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1));
+    tokio::time::sleep(time::Duration::from_secs(TEST_LOG_INTERVAL + 1)).await;
     let logs = get_stat_logs("test_bucket_counter_grouped_cumul_freq", &mut data);
     assert_eq!(logs.len(), 6);
 
@@ -826,8 +828,8 @@ fn test_extloggable_bucket_counter_grouped_cumul_freq() {
     );
 }
 
-#[test]
-fn test_set_slog_logger() {
+#[tokio::test]
+async fn test_set_slog_logger() {
     let (mut logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
 
     // check logging is working
@@ -852,26 +854,26 @@ fn test_set_slog_logger() {
     assert_eq!(logs.len(), 0);
 
     // check that stats were updated anyway
-    check_log_fields("test_counter", &mut data, "counter", f64::from(2));
+    check_log_fields("test_counter", &mut data, "counter", f64::from(2)).await;
 }
 
 // Verify that we can pass loggers across an unwind boundary.
-#[test]
-fn unwind_safety_works() {
+#[tokio::test]
+async fn unwind_safety_works() {
     let (logger, mut data) = create_logger_buffer(SLOG_TEST_STATS);
     let res = panic::catch_unwind(|| {
         log_external_stat(&logger, 234, 1);
     });
     assert!(res.is_ok());
     // Wait for the stats logs.
-    check_log_fields("test_counter", &mut data, "counter", f64::from(1));
+    check_log_fields("test_counter", &mut data, "counter", f64::from(1)).await;
 
     let logs = logs_in_range("STATS-1", "STATS-2", &mut data);
     assert_eq!(logs.len(), 0);
 }
 
-#[test]
-fn multiple_stats_defns() {
+#[tokio::test]
+async fn multiple_stats_defns() {
     #[derive(ExtLoggable, Clone, Serialize)]
     #[LogDetails(Id = "100", Text = "Something special happened", Level = "Info")]
     #[StatTrigger(StatName = "test_special_counter", Action = "Incr", Value = "1")]
@@ -887,16 +889,13 @@ fn multiple_stats_defns() {
     let mut data = iobuffer::IoBuffer::new();
     let logger = new_test_logger(data.clone());
 
-    let logger = StatisticsLogger::new(
-        logger,
-        StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
-            .with_log_interval(TEST_LOG_INTERVAL)
-            .with_stats(vec![SLOG_TEST_STATS, SLOG_EXTRA_STATS])
-            .fuse(), // LCOV_EXCL_LINE Kcov bug?
-    ); // LCOV_EXCL_LINE Kcov bug?
+    let logger = StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default()
+        .with_log_interval(TEST_LOG_INTERVAL)
+        .with_stats(vec![SLOG_TEST_STATS, SLOG_EXTRA_STATS])
+        .fuse(logger);
 
     xlog!(logger, SpecialLog);
     log_external_stat(&logger, 246, 7);
-    check_log_fields("test_counter", &mut data, "counter", f64::from(1));
-    check_log_fields("test_special_counter", &mut data, "counter", f64::from(1));
+    check_log_fields("test_counter", &mut data, "counter", f64::from(1)).await;
+    check_log_fields("test_special_counter", &mut data, "counter", f64::from(1)).await;
 }

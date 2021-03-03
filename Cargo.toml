@@ -15,12 +15,19 @@ harness = false
 name = "stats"
 
 [dependencies]
-erased-serde = "0.3"
-futures = "0.3.5"
 iobuffer = "0.2"
-serde = {version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1"
-tokio = {version = "0.2.22", features = ["rt-core", "stream", "time"] }
+
+# Used by the interval_logging feature
+tokio = { version = "1", features = ["rt", "time"], optional = true }
+
+# The version here is pinned hard to the same version as this crate
+# this is to allow the derive <-> extlog crate APIs to stay perfectly in sync,
+# allowing breaking changes that only affect each other to be elided
+[dependencies.slog-extlog-derive]
+version = "=6.0.1"
+path = "slog-extlog-derive"
 
 [dependencies.slog]
 features = ["nested-values"]
@@ -32,17 +39,11 @@ version = "2.1"
 
 [dev-dependencies]
 bencher = "0.1.5"
+erased-serde = "0.3"
+tokio = { version = "1", features = [ "macros", "rt-multi-thread", "time" ] }
 
-# Cargo doesn't let you publish crates with circular dev dependencies,
-# so in order to publish new versions you'll need to temporarily comment out
-# this dependency in your local codebase and publish the crate using the
-# --allow-dirty flag.
-#
-# This is a known problem in Cargo - see
-# https://github.com/rust-lang/cargo/issues/4242 for tracking issue.
-[dev-dependencies.slog-extlog-derive]
-version = "6"
-path = "slog-extlog-derive"
+[features]
+interval_logging = [ "tokio" ]
 
 [workspace]
 members = ["slog-extlog-derive"]

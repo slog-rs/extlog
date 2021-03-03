@@ -77,7 +77,7 @@
 //!
 //! ```
 //! use serde::Serialize;
-//! use slog_extlog::{DefaultLogger, define_stats, xlog};
+//! use slog_extlog::{DefaultLogger, stats::StatsLoggerBuilder, define_stats, xlog};
 //! use slog_extlog_derive::{ExtLoggable, SlogValue};
 //!
 //! use slog::{Drain, debug, info, o};
@@ -113,19 +113,17 @@
 //!
 //! const CRATE_LOG_NAME: &'static str = "FOO";
 //!
-//! fn main() {
-//!
+//! #[tokio::main]
+//! async fn main() {
 //!     // Use a basic logger with some context.
 //!     let logger = slog::Logger::root(
 //!         Mutex::new(slog_json::Json::default(std::io::stdout())).map(slog::Fuse),
 //!         o!());
-//!     let foo_logger = DefaultLogger::new(
-//!                        logger.new(o!("cxt" =>
-//!                          FooContext {
-//!                            id: "123456789".to_string(),
-//!                            method: FooMethod::POST,
-//!                          })),
-//!                        Default::default());
+//!     let logger = logger.new(o!("cxt" => FooContext {
+//!         id: "123456789".to_string(),
+//!         method: FooMethod::POST,
+//!     }));
+//!     let foo_logger: DefaultLogger = StatsLoggerBuilder::default().fuse(logger);
 //!
 //!     // Now make some logs...
 //!     xlog!(foo_logger, FooReqRcvd);
@@ -231,3 +229,6 @@ macro_rules! impl_value_wrapper {
         }
     };
 }
+
+// Re-export the derive macros to ensure that version compatibility is preserved
+pub use slog_extlog_derive::{ExtLoggable, SlogValue};

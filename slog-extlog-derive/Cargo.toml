@@ -13,10 +13,8 @@ edition = "2018"
 [dependencies]
 proc-macro2 = "1.0.19"
 slog = { version = "2.4", features = ['nested-values'] }
-syn = {version = "1.0.36", features = ["full"] }
+syn = { version = "1.0.36", features = ["full"] }
 quote = "1.0.7"
-slog-extlog = { version = "6", path = ".." }
-serde = {version = "1.0", features = ["derive"] }
 
 [lib]
 proc-macro = true
@@ -24,3 +22,6 @@ proc-macro = true
 [dev-dependencies]
 erased-serde = "0.3"
 iobuffer = "0.2"
+serde =  { version = "1.0", features = ["derive"] }
+slog-extlog = { version = "6", path = ".." }
+tokio = { version = "1.0", features = ["macros"] }

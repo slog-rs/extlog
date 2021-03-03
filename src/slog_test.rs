@@ -139,13 +139,12 @@ pub fn create_logger_buffer(
     let data = iobuffer::IoBuffer::new();
     let logger = new_test_logger(data.clone());
 
-    let logger = StatisticsLogger::new(
-        logger,
-        StatsConfigBuilder::<DefaultStatisticsLogFormatter>::new()
-            .with_log_interval(TEST_LOG_INTERVAL)
-            .with_stats(vec![stats])
-            .fuse(), // LCOV_EXCL_LINE Kcov bug?
-    ); // LCOV_EXCL_LINE Kcov bug?
+    let builder = StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default();
+
+    #[cfg(feature = "interval_logging")]
+    let builder = builder.with_log_interval(TEST_LOG_INTERVAL);
+
+    let logger = builder.with_stats(vec![stats]).fuse(logger);
     (logger, data)
 }
 

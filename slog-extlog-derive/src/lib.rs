@@ -95,7 +95,8 @@
 //! #[LogDetails(Id="103", Text="Foo response sent", Level="Info")]
 //! struct FooRspSent(FooRspCode);
 //!
-//! # fn main() { }
+//! # #[tokio::main]
+//! # async fn main() { }
 //! ```
 //!
 //! Defining some statistics from a single log.
@@ -104,7 +105,7 @@
 //! use slog_extlog_derive::{ExtLoggable, SlogValue};
 //! use serde::Serialize;
 //!
-//! use slog_extlog::{define_stats, ExtLoggable, stats, xlog};
+//! use slog_extlog::{define_stats, stats, xlog};
 //! use slog_extlog::stats::{Buckets, StatDefinition};
 //! use slog::o;
 //!
@@ -133,13 +134,13 @@
 //!   user: String
 //! }
 //!
-//! fn main() {
-//!   let cfg = stats::StatsConfigBuilder::<stats::DefaultStatisticsLogFormatter>::new().
-//!       with_stats(vec![FOO_STATS]).fuse();
-//!
+//! # #[tokio::main]
+//! async fn main() {
 //!   // Create the logger using whatever log format required.
 //!   let slog_logger = slog::Logger::root(slog::Discard, o!());
-//!   let logger = stats::StatisticsLogger::new(slog_logger, cfg);
+//!   let logger: slog_extlog::DefaultLogger = stats::StatsLoggerBuilder::default()
+//!       .with_stats(vec![FOO_STATS])
+//!       .fuse(slog_logger);
 //!
 //!   // Now all logs of `FooReqRcvd` will increment the `FooNonEmptyCount` and
 //!   // `FooTotalBytesByUser` stats...
@@ -160,7 +161,6 @@
 extern crate quote;
 
 use proc_macro::TokenStream;
-use proc_macro2;
 use slog::Level;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -188,7 +188,7 @@ impl FromStr for StatTriggerAction {
 
 enum StatTriggerValue {
     Fixed(i64),
-    Expr(syn::Expr),
+    Expr(Box<syn::Expr>),
 }
 
 // Info about a statistic trigger
@@ -703,17 +703,12 @@ fn is_attr_stat_id(attr: &syn::Attribute, id: &syn::Ident) -> bool {
     match attr.parse_meta() {
         // We only care about the case where this is a list of key-value type attributes.
         Ok(syn::Meta::List(ref list)) => list.nested.iter().any(|inner| {
-            if let syn::NestedMeta::Meta(ref item) = *inner {
-                match *item {
-                    syn::Meta::NameValue(ref name_value) => {
-                        if let syn::Lit::Str(ref s) = name_value.lit {
-                            let parsed_value = format_ident!("{}", s.value());
-                            name_value.path.is_ident("StatName") && &parsed_value == id
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
+            if let syn::NestedMeta::Meta(syn::Meta::NameValue(ref name_value)) = *inner {
+                if let syn::Lit::Str(ref s) = name_value.lit {
+                    let parsed_value = format_ident!("{}", s.value());
+                    name_value.path.is_ident("StatName") && &parsed_value == id
+                } else {
+                    false
                 }
             } else {
                 false
