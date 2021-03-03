@@ -1,3 +1,4 @@
+#![cfg(feature = "interval_logging")]
 //! Extlog tests for Stats tracker.
 //!
 
@@ -288,7 +289,8 @@ async fn test_extloggable_set_to() {
         &mut data,
         "counter",
         f64::from(42),
-    ).await;
+    )
+    .await;
 }
 
 #[tokio::test]

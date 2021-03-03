@@ -33,6 +33,8 @@ use std::panic::RefUnwindSafe;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::Arc;
 use std::sync::RwLock;
+
+#[cfg(feature = "interval_logging")]
 use std::time::Duration;
 
 use serde::Serialize;
@@ -502,7 +504,6 @@ pub type StatDefinitions = &'static [&'static (dyn StatDefinition + Sync + RefUn
 /// let logger = slog::Logger::root(slog::Discard, slog::o!());
 /// let stats = StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default()
 ///     .with_stats(full_stats)
-///     .with_log_interval(30)
 ///     .fuse(logger);
 ///
 /// # }
@@ -512,9 +513,10 @@ pub struct StatsLoggerBuilder<T>
 where
     T: StatisticsLogFormatter,
 {
-    /// The period, in seconds, to log the generated metrics into the log stream.  Defaults to
-    /// 300 seconds (5 minutes).  One log will be generated for each metric value.  A value of
-    /// `None` indicates stats should never be logged.
+    /// The period, in seconds, to log the generated metrics into the log stream.  One log will be
+    /// generated for each metric value.  A value of `None` indicates stats should never be logged.
+    /// Defaults to `None` (no interval logging).
+    #[cfg(feature = "interval_logging")]
     pub interval_secs: Option<u64>,
     /// The list of statistics to track.  This MUST be created using the
     /// [`define_stats`](../macro.define_stats.html) macro.
@@ -529,7 +531,8 @@ where
 {
     fn default() -> Self {
         Self {
-            interval_secs: Some(DEFAULT_LOG_INTERVAL_SECS),
+            #[cfg(feature = "interval_logging")]
+            interval_secs: None,
             stats: vec![],
             stat_formatter: PhantomData,
         }
@@ -538,20 +541,15 @@ where
 
 impl<T: StatisticsLogFormatter> StatsLoggerBuilder<T> {
     /// Set the list of statistics to track.
-    pub fn with_stats(mut self, defns: Vec<StatDefinitions>) -> Self {
-        self.stats = defns;
+    pub fn with_stats(mut self, stats: Vec<StatDefinitions>) -> Self {
+        self.stats = stats;
         self
     }
 
-    /// Enable emitting of logs on a regular interval (in seconds).
+    /// Enable emitting of logs for each registered statistic on a regular interval (in seconds).
+    #[cfg(feature = "interval_logging")]
     pub fn with_log_interval(mut self, interval_secs: u64) -> Self {
         self.interval_secs = Some(interval_secs);
-        self
-    }
-
-    /// Disable emitting of logs on a regular interval
-    pub fn without_interval_logs(mut self) -> Self {
-        self.interval_secs = None;
         self
     }
 
@@ -564,32 +562,35 @@ impl<T: StatisticsLogFormatter> StatsLoggerBuilder<T> {
             }
         }
 
-        // Wrap the tracker in an Arc so we can pass it to the Logger and to the timer.
+        // Wrap the tracker in an Arc so we can pass it to the Logger and to the timer (if enabled).
         let tracker = Arc::new(tracker);
 
-        // Clone the logger and tracker for using on the timer - we may not need them,
-        // but the clones are cheap.
-        let timer_tracker = Arc::clone(&tracker);
-        let timer_logger = logger.clone();
+        #[cfg(feature = "interval_logging")]
+        {
+            // Clone the logger and tracker for using on the timer - we may not need them,
+            // but the clones are cheap.
+            let timer_tracker = Arc::clone(&tracker);
+            let timer_logger = logger.clone();
 
-        let timer_full_logger = StatisticsLogger {
-            logger: timer_logger.clone(),
-            tracker: timer_tracker,
-        };
+            let timer_full_logger = StatisticsLogger {
+                logger: timer_logger.clone(),
+                tracker: timer_tracker,
+            };
 
-        // Kick off a timer to repeatedly log stats, if requested.
-        if let Some(interval_secs) = self.interval_secs {
-            tokio::spawn(async move {
-                let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+            // Kick off a timer to repeatedly log stats, if requested.
+            if let Some(interval_secs) = self.interval_secs {
+                tokio::spawn(async move {
+                    let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
 
-                // The first tick completes immediately, so we skip it.
-                interval.tick().await;
-
-                loop {
+                    // The first tick completes immediately, so we skip it.
                     interval.tick().await;
-                    timer_full_logger.tracker.log_all(&timer_full_logger);
-                }
-            });
+
+                    loop {
+                        interval.tick().await;
+                        timer_full_logger.tracker.log_all(&timer_full_logger);
+                    }
+                });
+            }
         }
         StatisticsLogger { logger, tracker }
     }
@@ -1241,9 +1242,8 @@ mod tests {
     #[test]
     // Check that loggers can be cloned even if the formatter can't.
     fn check_clone() {
-        let logger = StatsLoggerBuilder::<DummyNonCloneFormatter>::default()
-            .without_interval_logs()
-            .fuse(slog::Logger::root(slog::Discard, slog::o!()));
+        let builder = StatsLoggerBuilder::<DummyNonCloneFormatter>::default();
+        let logger = builder.fuse(slog::Logger::root(slog::Discard, slog::o!()));
         fn is_clone<T: Clone>(_: &T) {}
         is_clone(&logger);
     }

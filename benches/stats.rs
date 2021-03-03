@@ -3,8 +3,8 @@
 
 #![allow(missing_docs)]
 
-use serde::Serialize;
 use bencher::Bencher;
+use serde::Serialize;
 use slog_extlog::stats::*;
 use slog_extlog::xlog;
 use slog_extlog_derive::ExtLoggable;
@@ -68,7 +68,6 @@ struct FourthExternalLog {
 fn setup_logger() -> StatisticsLogger<DefaultStatisticsLogFormatter> {
     StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default()
         .with_stats(vec![SLOG_TEST_STATS])
-        .without_interval_logs()
         .fuse(slog::Logger::root(slog::Discard, slog::o!()))
 }
 
