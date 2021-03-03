@@ -231,4 +231,5 @@ macro_rules! impl_value_wrapper {
 }
 
 // Re-export the derive macros to ensure that version compatibility is preserved
+#[cfg(feature = "derive")]
 pub use slog_extlog_derive::{ExtLoggable, SlogValue};

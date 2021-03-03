@@ -20,4 +20,6 @@ script:
   if git log ${DCO_SIGNING_BASE_COMMIT}.. --grep "^signed-off-by: .\+@.\+" --regexp-ignore-case --invert-grep --no-merges | grep ^ ;
   then echo '**One or more commits are not signed off!' ; /bin/false ; fi
 - cargo clippy --all-targets --all-features --all -- -D warnings
-- cargo test --all
+- cargo clippy --all-targets --no-default-features --all -- -D warnings
+- cargo test --all --all-features
+- cargo test --all --no-default-features
