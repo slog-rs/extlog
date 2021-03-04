@@ -9,17 +9,26 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Changed
 
+### Added
+
+### Fixed
+
+## [7.0.0]
+
+### Changed
+
 - The statistics interval logging function is behind a feature flag (`interval_logging`) this allows users of the crate who are simply using the derive macros or `xlog!` to not have to pull in a whole `tokio` runtime.
 - `StatisticsLogger` creation API has changed:
     - Removed `StatsConfig` and `StatsConfigBuilder`
     - Added `StatsLoggerBuilder` with `fuse(logger)` to create the `StatisticsLogger`
     - Creating a `StatisticsLogger` must be done within a `tokio v1.0` runtime if the interval logging is enabled
-- `slog_extlog` re-exports the `#[derive(ExtLoggable)]` and `#[derive(SlogValue)]` macros so there's no need to depend explicitly on `slog_extlog_derive` any more
+- `slog_extlog` gains the `derive` feature which causes it to re-export the `#[derive(ExtLoggable)]` and `#[derive(SlogValue)]` macros meaning there's no need to depend explicitly on `slog_extlog_derive` any more
 
 ## [6.0.1]
 
 ### Fixed
-Correct dependency between derive and main crate
+
+- Correct dependency between derive and main crate
 
 ## [6.0.0]
 
@@ -29,7 +38,9 @@ Correct dependency between derive and main crate
 - Update to `tokio` 0.2 and `futures` 0.3
 
 ## [5.3.0]
+
 ### Changed
+
 - `slog_test` test methods: don't panic if log is partially written in another thread, but leave partial data for next read.
   Technically this is a breaking change if you use `slog_test`, since
   methods `new_test_logger`, `read_json_values` and `logs_in_range` now accept
@@ -38,34 +49,44 @@ Correct dependency between derive and main crate
 - (Internal) Add comment to statics created through `define_stats` macro to prevent downstream clippy failures. Also add a `.cargo/config` turning on some common warnings (and fix up code, mainly comments).
 
 ## [5.2.1]
-### Changed
+
+### Fixed
+
 - Ensure that derive log level handling still works with `slog` 2.5.
 
 ## [5.2.0]
+
 ### Changed
+
 - Update to 2018 edition.
 - Update to latest `slog` - stop pinning to old version.
 
 ### Added
 
 ## [5.1.0]
-### Changed
+
 ### Added
+
 - Add the `FixedGroups` attribute to `StatTrigger`, allowing for a compile-time constant value on
 a metric.
 
 ## [5.0.0]
-### Changed
+
 ### Added
+
 - Add the `BucketCounter` stat type for tracking stats grouped into numerical ranges.
 
 ## [4.1.0]
+
 ### Added
+
 - Add a `DefaultLogger` for users who don't need statistics.
 - Move repository homepage.
 
 ## [4.0.0]
+
 ### Changed
+
  - Some small but breaking changes to stats creation API.
    - No longer require an instance of the formatter type.
    - Take a list of `StatsDefinitions` so users can track stats from multiple crates in one place.
@@ -74,9 +95,11 @@ a metric.
 - Proper `Clone` support for `StatisticsLogger`
 
 ## [3.2.0] - 2018-04-25
+
 ### Added
 - Add support for retrieving the current values of all stats.
 
 ## [3.1.0] - 2018-04-20
-Initial open source release.
-Versions 3.0.0 and earlier were proprietary.
+
+- Initial open source release.
+- Versions 3.0.0 and earlier were proprietary.
