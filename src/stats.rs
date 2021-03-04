@@ -37,7 +37,6 @@ use std::sync::RwLock;
 #[cfg(feature = "interval_logging")]
 use std::time::Duration;
 
-use serde::Serialize;
 use slog::info;
 
 //////////////////////////////////////////////////////
@@ -232,7 +231,7 @@ pub enum ChangeType {
 }
 
 /// Used to represent the upper limit of a bucket.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Debug, Clone, Copy, serde::Serialize, PartialEq, PartialOrd, Eq, Ord)]
 pub enum BucketLimit {
     /// A numerical upper limit.
     Num(i64),
@@ -264,7 +263,7 @@ impl fmt::Display for BucketLimit {
 }
 
 /// A set of numerical buckets together with a method for sorting values into them.
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
 pub struct Buckets {
     /// The method to use to sort values into buckets.
     pub method: BucketMethod,
@@ -327,7 +326,7 @@ impl Buckets {
 }
 
 /// Used to determine which buckets to update when a BucketCounter stat is updated
-#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, serde::Serialize, PartialEq)]
 pub enum BucketMethod {
     /// When a value is recorded, only update the bucket it lands in
     Freq,
@@ -336,7 +335,7 @@ pub enum BucketMethod {
 }
 
 /// Types of statistics.  Automatically determined from the `StatDefinition`.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, serde::Serialize, PartialEq)]
 pub enum StatType {
     /// A counter - a value that only increments.
     Counter,

@@ -3,6 +3,10 @@
 use serde::Serialize;
 
 use slog_extlog::{define_stats, xlog};
+
+#[cfg(feature = "derive")]
+use slog_extlog::ExtLoggable;
+#[cfg(not(feature = "derive"))]
 use slog_extlog_derive::ExtLoggable;
 
 use slog_extlog::slog_test::*;

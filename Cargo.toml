@@ -17,33 +17,28 @@ name = "stats"
 [dependencies]
 iobuffer = "0.2"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1"
+serde_json = "1.0"
+slog = { version = "2.4", features = [ "nested-values" ] }
+slog-json = { version = "2.1", features = [ "nested-values" ] }
 
 # Used by the interval_logging feature
-tokio = { version = "1", features = ["rt", "time"], optional = true }
+tokio = { version = "1", features = [ "rt", "time" ], optional = true }
 
 # The version here is pinned hard to the same version as this crate
 # this is to allow the derive <-> extlog crate APIs to stay perfectly in sync,
-# allowing breaking changes that only affect each other to be elided
-[dependencies.slog-extlog-derive]
-version = "=6.0.1"
-path = "slog-extlog-derive"
-
-[dependencies.slog]
-features = ["nested-values"]
-version = "2.4"
-
-[dependencies.slog-json]
-features = ["nested-values"]
-version = "2.1"
+# allowing breaking changes that only affect the interface between these crates
+# to be elided downstream
+slog-extlog-derive = { version = "=6.0.1", path = "slog-extlog-derive", optional = true }
 
 [dev-dependencies]
 bencher = "0.1.5"
 erased-serde = "0.3"
 tokio = { version = "1", features = [ "macros", "rt-multi-thread", "time" ] }
+slog-extlog-derive = { version = "=6.0.1", path = "slog-extlog-derive" }
 
 [features]
 interval_logging = [ "tokio" ]
+derive = [ "slog-extlog-derive" ]
 
 [workspace]
-members = ["slog-extlog-derive"]
+members = [ "slog-extlog-derive" ]
