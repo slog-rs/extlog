@@ -24,7 +24,7 @@
 //! ## Log objects
 //! To use this crate to define external logs:
 //!
-//!   - Add `slog-extlog` and `dlog-extlog-derive` to your `Cargo.toml`.
+//!   - Add `slog-extlog` with the `derive` feature enabled to your `Cargo.toml`.
 //!
 //! To make a new external log using this crate:
 //!
