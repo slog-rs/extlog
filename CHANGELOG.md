@@ -8,8 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Changed
-
-### Added
+- Change `StatsTracker` and `StatisticsLogger` to not be bound by <T>
+  - Breaking change: users must now pass the formatter as a type parameter
+    to the `fuse()` method of the StatsLoggerBuilder.
 
 ### Fixed
 

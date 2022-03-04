@@ -133,18 +133,18 @@ pub static TEST_LOG_INTERVAL: u64 = 5;
 ///
 /// Creates a logger using the provided statistics and buffer so we can easily
 /// view the generated logs.
-pub fn create_logger_buffer(
-    stats: StatDefinitions,
-) -> (StatisticsLogger<DefaultStatisticsLogFormatter>, Buffer) {
+pub fn create_logger_buffer(stats: StatDefinitions) -> (StatisticsLogger, Buffer) {
     let data = iobuffer::IoBuffer::new();
     let logger = new_test_logger(data.clone());
 
-    let builder = StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default();
+    let builder = StatsLoggerBuilder::default();
 
     #[cfg(feature = "interval_logging")]
     let builder = builder.with_log_interval(TEST_LOG_INTERVAL);
 
-    let logger = builder.with_stats(vec![stats]).fuse(logger);
+    let logger = builder
+        .with_stats(vec![stats])
+        .fuse::<DefaultStatisticsLogFormatter>(logger);
     (logger, data)
 }
 
