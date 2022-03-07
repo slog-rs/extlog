@@ -8,9 +8,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Changed
-- Change `StatsTracker` and `StatisticsLogger` to not be bound by <T>
-  - Breaking change: users must now pass the formatter as a type parameter
-    to the `fuse()` method of the StatsLoggerBuilder.
+- Change `StatsTracker`, `StatsLoggerBuilder` and `StatisticsLogger` to not be bound by `<T>`
+  - Breaking change: `StatsLoggerBuilder` loses `with_log_interval()` and gains `fuse_with_log_interval<T>`,
+    where `<T>` is a `StatisticsLogFormatter`. This method is only accessible with
+    the `interval_logging` feature.
+  - Breaking change: `StatsTracker::log_all()` now requires a `<T: StatisticsLogFormatter>` bound
+    when called.
 
 ### Fixed
 

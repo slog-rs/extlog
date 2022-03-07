@@ -5,7 +5,6 @@
 
 use serde::Serialize;
 use slog::o;
-use slog_extlog::stats::DefaultStatisticsLogFormatter;
 use slog_extlog::xlog;
 use slog_extlog_derive::{ExtLoggable, SlogValue};
 
@@ -19,7 +18,7 @@ const CRATE_LOG_NAME: &str = "SLOGTST";
 fn create_logger(testname: &'static str) -> (DefaultLogger, iobuffer::IoBuffer) {
     let data = iobuffer::IoBuffer::new();
     let logger = slog_test::new_test_logger(data.clone()).new(o!("testname" => testname));
-    let logger = StatsLoggerBuilder::default().fuse::<DefaultStatisticsLogFormatter>(logger);
+    let logger = StatsLoggerBuilder::default().fuse(logger);
     (logger, data)
 }
 
@@ -73,8 +72,7 @@ async fn test_derived_structs() {
         user: "Bob".to_string(),
         count: 2,
     }));
-    let foo_logger =
-        StatsLoggerBuilder::default().fuse::<DefaultStatisticsLogFormatter>(foo_logger);
+    let foo_logger = StatsLoggerBuilder::default().fuse(foo_logger);
 
     xlog!(foo_logger, FooRspRcvd(FooRspType::Ok, "Success"));
     let logs = slog_test::read_json_values(&mut data);

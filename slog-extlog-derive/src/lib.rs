@@ -140,7 +140,7 @@
 //!   let slog_logger = slog::Logger::root(slog::Discard, o!());
 //!   let logger = stats::StatsLoggerBuilder::default()
 //!       .with_stats(vec![FOO_STATS])
-//!       .fuse::<stats::DefaultStatisticsLogFormatter>(slog_logger);
+//!       .fuse(slog_logger);
 //!
 //!   // Now all logs of `FooReqRcvd` will increment the `FooNonEmptyCount` and
 //!   // `FooTotalBytesByUser` stats...

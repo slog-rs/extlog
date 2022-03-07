@@ -882,9 +882,8 @@ async fn multiple_stats_defns() {
     let logger = new_test_logger(data.clone());
 
     let logger = StatsLoggerBuilder::default()
-        .with_log_interval(TEST_LOG_INTERVAL)
         .with_stats(vec![SLOG_TEST_STATS, SLOG_EXTRA_STATS])
-        .fuse::<DefaultStatisticsLogFormatter>(logger);
+        .fuse_with_log_interval::<DefaultStatisticsLogFormatter>(TEST_LOG_INTERVAL, logger);
 
     xlog!(logger, SpecialLog);
     log_external_stat(&logger, 246, 7);

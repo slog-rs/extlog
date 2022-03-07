@@ -123,7 +123,7 @@
 //!         id: "123456789".to_string(),
 //!         method: FooMethod::POST,
 //!     }));
-//!     let foo_logger = StatsLoggerBuilder::default().fuse::<DefaultStatisticsLogFormatter>(logger);
+//!     let foo_logger = StatsLoggerBuilder::default().fuse(logger);
 //!
 //!     // Now make some logs...
 //!     xlog!(foo_logger, FooReqRcvd);
