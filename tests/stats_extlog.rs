@@ -160,20 +160,12 @@ struct FixedExternalLog {
 // LCOV_EXCL_STOP
 
 // Shortcut for a standard external log of the first struct with given values.
-fn log_external_stat(
-    logger: &StatisticsLogger<DefaultStatisticsLogFormatter>,
-    bytes: u32,
-    unbytes: i8,
-) {
+fn log_external_stat(logger: &StatisticsLogger, bytes: u32, unbytes: i8) {
     xlog!(logger, ExternalLog { bytes, unbytes });
 }
 
 // Shortcut for a standard external log of the fourth struct with given values.
-fn log_external_grouped(
-    logger: &StatisticsLogger<DefaultStatisticsLogFormatter>,
-    name: String,
-    error: u8,
-) {
+fn log_external_grouped(logger: &StatisticsLogger, name: String, error: u8) {
     xlog!(
         logger,
         FourthExternalLog {
@@ -889,10 +881,9 @@ async fn multiple_stats_defns() {
     let mut data = iobuffer::IoBuffer::new();
     let logger = new_test_logger(data.clone());
 
-    let logger = StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default()
-        .with_log_interval(TEST_LOG_INTERVAL)
+    let logger = StatsLoggerBuilder::default()
         .with_stats(vec![SLOG_TEST_STATS, SLOG_EXTRA_STATS])
-        .fuse(logger);
+        .fuse_with_log_interval::<DefaultStatisticsLogFormatter>(TEST_LOG_INTERVAL, logger);
 
     xlog!(logger, SpecialLog);
     log_external_stat(&logger, 246, 7);

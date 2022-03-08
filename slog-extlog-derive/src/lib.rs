@@ -138,7 +138,7 @@
 //! async fn main() {
 //!   // Create the logger using whatever log format required.
 //!   let slog_logger = slog::Logger::root(slog::Discard, o!());
-//!   let logger: slog_extlog::DefaultLogger = stats::StatsLoggerBuilder::default()
+//!   let logger = stats::StatsLoggerBuilder::default()
 //!       .with_stats(vec![FOO_STATS])
 //!       .fuse(slog_logger);
 //!
@@ -577,8 +577,7 @@ fn impl_loggable(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
             for #name<#(#lifetimes_2,)* #(#tys_2),*>
         #(where #tys_3: #(#bounds + )* slog::Value),*{
 
-            fn ext_log<T>(&self, logger: &slog_extlog::stats::StatisticsLogger<T>)
-            where T: slog_extlog::stats::StatisticsLogFormatter + Send + Sync + 'static {
+            fn ext_log(&self, logger: &slog_extlog::stats::StatisticsLogger) {
                 logger.update_stats(self);
                 // Use a `FnValue` for the log ID so the format string is allcoated only if the log
                 // is actually written.  dieally, we'd like this to be compile-time allocated but

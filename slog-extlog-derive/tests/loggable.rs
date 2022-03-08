@@ -72,7 +72,7 @@ async fn test_derived_structs() {
         user: "Bob".to_string(),
         count: 2,
     }));
-    let foo_logger: DefaultLogger = StatsLoggerBuilder::default().fuse(foo_logger);
+    let foo_logger = StatsLoggerBuilder::default().fuse(foo_logger);
 
     xlog!(foo_logger, FooRspRcvd(FooRspType::Ok, "Success"));
     let logs = slog_test::read_json_values(&mut data);

@@ -77,7 +77,7 @@
 //!
 //! ```
 //! use serde::Serialize;
-//! use slog_extlog::{DefaultLogger, stats::StatsLoggerBuilder, define_stats, xlog};
+//! use slog_extlog::{stats::DefaultStatisticsLogFormatter, stats::StatsLoggerBuilder, define_stats, xlog};
 //! use slog_extlog_derive::{ExtLoggable, SlogValue};
 //!
 //! use slog::{Drain, debug, info, o};
@@ -123,7 +123,7 @@
 //!         id: "123456789".to_string(),
 //!         method: FooMethod::POST,
 //!     }));
-//!     let foo_logger: DefaultLogger = StatsLoggerBuilder::default().fuse(logger);
+//!     let foo_logger = StatsLoggerBuilder::default().fuse(logger);
 //!
 //!     // Now make some logs...
 //!     xlog!(foo_logger, FooReqRcvd);
@@ -160,7 +160,7 @@ impl<T> SlogValueDerivable for T where T: std::fmt::Debug + Clone + serde::Seria
 {}
 
 /// The default logger type.
-pub type DefaultLogger = stats::StatisticsLogger<stats::DefaultStatisticsLogFormatter>;
+pub type DefaultLogger = stats::StatisticsLogger;
 
 /// An object that can be logged.
 ///
@@ -170,9 +170,7 @@ pub trait ExtLoggable: slog::Value {
     /// Log this object with the provided `Logger`.
     ///
     /// Do not call directly - use [`xlog!`](macro.xlog.html) instead.
-    fn ext_log<T>(&self, logger: &stats::StatisticsLogger<T>)
-    where
-        T: stats::StatisticsLogFormatter + Send + Sync + 'static;
+    fn ext_log(&self, logger: &stats::StatisticsLogger);
 }
 
 /// Log an external log through an `slog::Logger`.

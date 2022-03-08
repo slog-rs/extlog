@@ -129,23 +129,29 @@ pub fn assert_json_matches(actual: &serde_json::Value, expected: &serde_json::Va
 /// A default logging interval for tests, short so UTs run faster.
 pub static TEST_LOG_INTERVAL: u64 = 5;
 
+#[cfg(feature = "interval_logging")]
+fn new_stats_logger(stats: StatDefinitions, logger: slog::Logger) -> StatisticsLogger {
+    let builder = StatsLoggerBuilder::default();
+    builder
+        .with_stats(vec![stats])
+        .fuse_with_log_interval::<DefaultStatisticsLogFormatter>(TEST_LOG_INTERVAL, logger)
+}
+
+#[cfg(not(feature = "interval_logging"))]
+fn new_stats_logger(stats: StatDefinitions, logger: slog::Logger) -> StatisticsLogger {
+    let builder = StatsLoggerBuilder::default();
+    builder.with_stats(vec![stats]).fuse(logger)
+}
+
 /// Common setup function.
 ///
 /// Creates a logger using the provided statistics and buffer so we can easily
 /// view the generated logs.
-pub fn create_logger_buffer(
-    stats: StatDefinitions,
-) -> (StatisticsLogger<DefaultStatisticsLogFormatter>, Buffer) {
+pub fn create_logger_buffer(stats: StatDefinitions) -> (StatisticsLogger, Buffer) {
     let data = iobuffer::IoBuffer::new();
     let logger = new_test_logger(data.clone());
-
-    let builder = StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default();
-
-    #[cfg(feature = "interval_logging")]
-    let builder = builder.with_log_interval(TEST_LOG_INTERVAL);
-
-    let logger = builder.with_stats(vec![stats]).fuse(logger);
-    (logger, data)
+    let stats_logger = new_stats_logger(stats, logger);
+    (stats_logger, data)
 }
 
 /// An expected statistic helper method.

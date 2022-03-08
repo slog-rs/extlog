@@ -27,7 +27,6 @@
 
 use std::collections::HashMap;
 use std::fmt;
-use std::marker::PhantomData;
 use std::ops::Deref;
 use std::panic::RefUnwindSafe;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -367,34 +366,15 @@ impl slog::Value for StatType {
 
 /// An object that tracks statistics and can be asked to log them
 // LCOV_EXCL_START not interesting to track automatic derive coverage
-#[derive(Debug)]
-pub struct StatsTracker<T: StatisticsLogFormatter> {
+#[derive(Debug, Default)]
+pub struct StatsTracker {
     // The list of statistics, mapping from stat name to value.
     stats: HashMap<&'static str, Stat>,
-
-    // The callback to make for logging the statistic.  This is a marker type so store it
-    // as phantom.
-    stat_formatter: PhantomData<T>,
 }
 // LCOV_EXCL_STOP
 
-impl<T> Default for StatsTracker<T>
-where
-    T: StatisticsLogFormatter,
-{
-    fn default() -> Self {
-        StatsTracker {
-            stats: HashMap::new(),
-            stat_formatter: PhantomData,
-        }
-    }
-}
-
-impl<T> StatsTracker<T>
-where
-    T: StatisticsLogFormatter,
-{
-    /// Create a new tracker with the given formatter.
+impl StatsTracker {
+    /// Create a new tracker.
     pub fn new() -> Self {
         Default::default()
     }
@@ -435,7 +415,7 @@ where
     /// Log all statistics.
     ///
     /// This function is usually just called on a timer by the logger directly.
-    pub fn log_all(&self, logger: &StatisticsLogger<T>) {
+    pub fn log_all<T: StatisticsLogFormatter>(&self, logger: &StatisticsLogger) {
         for stat in self.stats.values() {
             // Log all the grouped and bucketed values.
             let outputs = stat.get_tagged_vals();
@@ -446,7 +426,7 @@ where
                 let tags = stat.get_tag_pairs(&tag_values);
 
                 T::log_stat(
-                    &logger,
+                    logger,
                     &StatLogData {
                         stype: stat.defn.stype(),
                         name: stat.defn.name(),
@@ -501,59 +481,28 @@ pub type StatDefinitions = &'static [&'static (dyn StatDefinition + Sync + RefUn
 ///
 /// let full_stats = vec![MY_STATS];
 /// let logger = slog::Logger::root(slog::Discard, slog::o!());
-/// let stats = StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default()
+/// let stats = StatsLoggerBuilder::default()
 ///     .with_stats(full_stats)
 ///     .fuse(logger);
 ///
 /// # }
 /// ```
-#[derive(Debug)]
-pub struct StatsLoggerBuilder<T>
-where
-    T: StatisticsLogFormatter,
-{
-    /// The period, in seconds, to log the generated metrics into the log stream.  One log will be
-    /// generated for each metric value.  A value of `None` indicates stats should never be logged.
-    /// Defaults to `None` (no interval logging).
-    #[cfg(feature = "interval_logging")]
-    pub interval_secs: Option<u64>,
+#[derive(Debug, Default)]
+pub struct StatsLoggerBuilder {
     /// The list of statistics to track.  This MUST be created using the
     /// [`define_stats`](../macro.define_stats.html) macro.
     pub stats: Vec<StatDefinitions>,
-    /// An object that handles formatting the individual statistic values into a log.
-    pub stat_formatter: PhantomData<T>,
 }
 
-impl<T> Default for StatsLoggerBuilder<T>
-where
-    T: StatisticsLogFormatter,
-{
-    fn default() -> Self {
-        Self {
-            #[cfg(feature = "interval_logging")]
-            interval_secs: None,
-            stats: vec![],
-            stat_formatter: PhantomData,
-        }
-    }
-}
-
-impl<T: StatisticsLogFormatter> StatsLoggerBuilder<T> {
+impl StatsLoggerBuilder {
     /// Set the list of statistics to track.
     pub fn with_stats(mut self, stats: Vec<StatDefinitions>) -> Self {
         self.stats = stats;
         self
     }
 
-    /// Enable emitting of logs for each registered statistic on a regular interval (in seconds).
-    #[cfg(feature = "interval_logging")]
-    pub fn with_log_interval(mut self, interval_secs: u64) -> Self {
-        self.interval_secs = Some(interval_secs);
-        self
-    }
-
-    /// Construct the StatisticsLogger - this will start the interval logging if requested.
-    pub fn fuse(self, logger: slog::Logger) -> StatisticsLogger<T> {
+    /// Construct the StatisticsLogger
+    pub fn fuse(self, logger: slog::Logger) -> StatisticsLogger {
         let mut tracker = StatsTracker::new();
         for set in self.stats {
             for s in set {
@@ -561,37 +510,42 @@ impl<T: StatisticsLogFormatter> StatsLoggerBuilder<T> {
             }
         }
 
-        // Wrap the tracker in an Arc so we can pass it to the Logger and to the timer (if enabled).
-        let tracker = Arc::new(tracker);
-
-        #[cfg(feature = "interval_logging")]
-        {
-            // Clone the logger and tracker for using on the timer - we may not need them,
-            // but the clones are cheap.
-            let timer_tracker = Arc::clone(&tracker);
-            let timer_logger = logger.clone();
-
-            let timer_full_logger = StatisticsLogger {
-                logger: timer_logger.clone(),
-                tracker: timer_tracker,
-            };
-
-            // Kick off a timer to repeatedly log stats, if requested.
-            if let Some(interval_secs) = self.interval_secs {
-                tokio::spawn(async move {
-                    let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
-
-                    // The first tick completes immediately, so we skip it.
-                    interval.tick().await;
-
-                    loop {
-                        interval.tick().await;
-                        timer_full_logger.tracker.log_all(&timer_full_logger);
-                    }
-                });
-            }
+        StatisticsLogger {
+            logger,
+            tracker: Arc::new(tracker),
         }
-        StatisticsLogger { logger, tracker }
+    }
+
+    /// Construct the StatisticsLogger - this will start the interval logging if requested.
+    ///
+    /// interval_secs: The period, in seconds, to log the generated metrics into the log stream.
+    /// One log will be generated for each metric value.
+    #[cfg(feature = "interval_logging")]
+    pub fn fuse_with_log_interval<T: StatisticsLogFormatter>(
+        self,
+        interval_secs: u64,
+        logger: slog::Logger,
+    ) -> StatisticsLogger {
+        // Fuse the logger using the standard function
+        let stats_logger = self.fuse(logger);
+
+        // Clone the logger for using on the timer.
+        let timer_full_logger = stats_logger.clone();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
+
+            // The first tick completes immediately, so we skip it.
+            interval.tick().await;
+
+            loop {
+                interval.tick().await;
+                timer_full_logger.tracker.log_all::<T>(&timer_full_logger);
+            }
+        });
+
+        // Return the fused logger.
+        stats_logger
     }
 }
 
@@ -623,7 +577,7 @@ pub static DEFAULT_LOG_ID: &str = "STATS-1";
 
 impl StatisticsLogFormatter for DefaultStatisticsLogFormatter {
     /// The formatting callback.  This default implementation just logs each field.
-    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData<'_>)
+    fn log_stat(logger: &StatisticsLogger, stat: &StatLogData<'_>)
     where
         Self: Sized,
     {
@@ -650,7 +604,7 @@ pub trait StatisticsLogFormatter: Sync + Send + 'static {
     /// The `DefaultStatisticsLogFormatter` provides a basic format, or users can override the
     /// format of the generated logs by providing an object that implements this trait in the
     /// `StatsConfig`.
-    fn log_stat(logger: &StatisticsLogger<Self>, stat: &StatLogData<'_>)
+    fn log_stat(logger: &StatisticsLogger, stat: &StatLogData<'_>)
     where
         Self: Sized;
 }
@@ -658,38 +612,22 @@ pub trait StatisticsLogFormatter: Sync + Send + 'static {
 /// A logger with statistics tracking.
 ///
 /// This should only be created through the `new` method.
-#[derive(Debug)]
-pub struct StatisticsLogger<T: StatisticsLogFormatter> {
+#[derive(Debug, Clone)]
+pub struct StatisticsLogger {
     /// The logger that receives the logs.
     logger: slog::Logger,
     /// The stats tracker.
-    tracker: Arc<StatsTracker<T>>,
+    tracker: Arc<StatsTracker>,
 }
 
-// Manually impl clone because the automatically derived type requires that `T:Clone`,
-// which isn't needed.
-//
-// See https://github.com/rust-lang/rust/issues/26925 for details.
-impl<T: StatisticsLogFormatter> Clone for StatisticsLogger<T> {
-    fn clone(&self) -> Self {
-        StatisticsLogger {
-            logger: self.logger.clone(),
-            tracker: self.tracker.clone(),
-        } // LCOV_EXCL_LINE Kcov bug
-    }
-}
-
-impl<T: StatisticsLogFormatter> Deref for StatisticsLogger<T> {
+impl Deref for StatisticsLogger {
     type Target = slog::Logger;
     fn deref(&self) -> &Self::Target {
         &self.logger
     }
 }
 
-impl<T> StatisticsLogger<T>
-where
-    T: StatisticsLogFormatter + Send + Sync + 'static,
-{
+impl StatisticsLogger {
     /// Build a child logger with new parameters.
     ///
     /// This is essentially a wrapper around `slog::Logger::new()`.
@@ -1231,7 +1169,7 @@ mod tests {
     #[allow(dead_code)]
     struct DummyNonCloneFormatter;
     impl StatisticsLogFormatter for DummyNonCloneFormatter {
-        fn log_stat(_logger: &StatisticsLogger<Self>, _stat: &StatLogData<'_>)
+        fn log_stat(_logger: &StatisticsLogger, _stat: &StatLogData<'_>)
         where
             Self: Sized,
         {
@@ -1241,7 +1179,7 @@ mod tests {
     #[test]
     // Check that loggers can be cloned even if the formatter can't.
     fn check_clone() {
-        let builder = StatsLoggerBuilder::<DummyNonCloneFormatter>::default();
+        let builder = StatsLoggerBuilder::default();
         let logger = builder.fuse(slog::Logger::root(slog::Discard, slog::o!()));
         fn is_clone<T: Clone>(_: &T) {}
         is_clone(&logger);
