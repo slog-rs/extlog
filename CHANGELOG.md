@@ -8,14 +8,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 
 ### Changed
+
+### Added
+
+### Fixed
+
+## [8.0.0]
+
+### Changed
 - Change `StatsTracker`, `StatsLoggerBuilder` and `StatisticsLogger` to not be bound by `<T>`
   - Breaking change: `StatsLoggerBuilder` loses `with_log_interval()` and gains `fuse_with_log_interval<T>`,
     where `<T>` is a `StatisticsLogFormatter`. This method is only accessible with
     the `interval_logging` feature.
   - Breaking change: `StatsTracker::log_all()` now requires a `<T: StatisticsLogFormatter>` bound
     when called.
-
-### Fixed
 
 ## [7.0.0]
 

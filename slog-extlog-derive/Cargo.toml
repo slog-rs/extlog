@@ -1,6 +1,6 @@
 [package]
 name = "slog-extlog-derive"
-version = "7.0.0"
+version = "8.0.0"
 authors = ["Metaswitch Networks Ltd"]
 license = "Apache-2.0"
 description = "Custom derive code for slog-extlog"
@@ -30,5 +30,5 @@ serde =  { version = "1.0", features = ["derive"] }
 #
 # This is a known problem in Cargo - see
 # https://github.com/rust-lang/cargo/issues/4242 for tracking issue.
-slog-extlog = { version = "7", path = ".." }
-tokio = { version = "1.0", features = ["macros"] }
+slog-extlog = { path = ".." }
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
