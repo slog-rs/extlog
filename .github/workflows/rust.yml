@@ -16,7 +16,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - run: rustup component add clippy
     - name: Build (all features)
       run: cargo clippy --verbose --all-targets --all-features --all -- -D warnings
     - name: Build (no features)

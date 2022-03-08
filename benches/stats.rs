@@ -65,8 +65,8 @@ struct FourthExternalLog {
 }
 //LCOV_EXCL_STOP
 
-fn setup_logger() -> StatisticsLogger<DefaultStatisticsLogFormatter> {
-    StatsLoggerBuilder::<DefaultStatisticsLogFormatter>::default()
+fn setup_logger() -> StatisticsLogger {
+    StatsLoggerBuilder::default()
         .with_stats(vec![SLOG_TEST_STATS])
         .fuse(slog::Logger::root(slog::Discard, slog::o!()))
 }

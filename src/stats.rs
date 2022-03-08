@@ -911,7 +911,7 @@ impl BucketCounterData {
                 .map(|(mut tag_values, index, val)| {
                     let bucket = self.buckets.get(index).expect("Invalid bucket index");
                     // Add the bucket label value as an additional tag value.
-                    tag_values.push_str(&format!(",{}", bucket.to_string()));
+                    tag_values.push_str(&format!(",{}", bucket));
                     (tag_values, val)
                 })
                 .collect()
