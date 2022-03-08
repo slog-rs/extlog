@@ -362,7 +362,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
     // Build up the return values for those match statements.
     let stat_conds = triggers
         .iter()
-        .map(|ref t| &t.condition_body)
+        .map(|t| &t.condition_body)
         .collect::<Vec<_>>();
 
     // Build up the input match statements value for the `change` method.
@@ -537,7 +537,7 @@ fn impl_loggable(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
                 Ok(syn::Meta::List(metalist)) => metalist
                     .nested
                     .iter()
-                    .map(|attr_val| parse_fixed_field(attr_val))
+                    .map(parse_fixed_field)
                     .map(|(key, value)| quote!( #key => #value ))
                     .collect::<Vec<_>>(),
                 _ => panic!("Invalid format for #[FixedFields(key = value)]"),
