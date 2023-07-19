@@ -261,7 +261,7 @@ fn impl_value_traits(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
             #(where #tys_3: #(#bounds + )* serde::Serialize + slog::Value),*  {
 
             /// Convert into a serde object.
-            fn as_serde(&self) -> &erased_serde::Serialize {
+            fn as_serde(&self) -> &slog_extlog::erased_serde::Serialize {
                 self
             }
 
