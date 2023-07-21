@@ -145,6 +145,9 @@
 
 // Copyright 2017 Metaswitch Networks
 
+/// Re-export erased_serde since the derive crate references it
+pub use erased_serde;
+
 // Statistics handling
 pub mod stats;
 

@@ -261,7 +261,7 @@ fn impl_value_traits(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
             #(where #tys_3: #(#bounds + )* serde::Serialize + slog::Value),*  {
 
             /// Convert into a serde object.
-            fn as_serde(&self) -> &erased_serde::Serialize {
+            fn as_serde(&self) -> &slog_extlog::erased_serde::Serialize {
                 self
             }
 
@@ -365,9 +365,6 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
         .map(|t| &t.condition_body)
         .collect::<Vec<_>>();
 
-    // Build up the input match statements value for the `change` method.
-    let stat_ids_change = stat_ids_cond.clone();
-
     // Build up the return values for those match statements.
     let stat_changes = triggers
         .iter()
@@ -465,7 +462,7 @@ fn impl_stats_trigger(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
                       stat_id: &slog_extlog::stats::StatDefinitionTagged) ->
                       Option<slog_extlog::stats::ChangeType> {
                 match stat_id.defn.name() {
-                    #(#stat_ids_change => #stat_changes,)*
+                    #(#stat_ids_cond => #stat_changes,)*
                     s => panic!("Change requested for unknown stat {}", s)
                 }
             }

@@ -292,7 +292,7 @@ impl Buckets {
                 .iter()
                 .enumerate()
                 .filter(|(_, limit)| match limit {
-                    BucketLimit::Num(b) => (value <= *b as f64),
+                    BucketLimit::Num(b) => value <= *b as f64,
                     BucketLimit::Unbounded => true,
                 })
                 .map(|(i, _)| i)
@@ -761,11 +761,11 @@ impl StatTypeData {
     }
 
     /// Get all the tags for this stat as a vector of `(name, value)` tuples.
-    fn get_tag_pairs<'a, 'b, 'c>(
-        &'a self,
-        tag_values: &'b str,
-        defn: &'c dyn StatDefinition,
-    ) -> Option<Vec<(&'static str, &'b str)>> {
+    fn get_tag_pairs<'a>(
+        &self,
+        tag_values: &'a str,
+        defn: &dyn StatDefinition,
+    ) -> Option<Vec<(&'static str, &'a str)>> {
         if let StatTypeData::BucketCounter(ref bucket_counter_data) = self {
             Some(bucket_counter_data.get_tag_pairs(tag_values, defn))
         } else {
@@ -875,11 +875,11 @@ impl BucketCounterData {
     }
 
     /// Get all the tags for this stat as a vector of `(name, value)` tuples.
-    fn get_tag_pairs<'a, 'b, 'c>(
-        &'a self,
-        tag_values: &'b str,
-        defn: &'c dyn StatDefinition,
-    ) -> Vec<(&'static str, &'b str)> {
+    fn get_tag_pairs<'a>(
+        &self,
+        tag_values: &'a str,
+        defn: &dyn StatDefinition,
+    ) -> Vec<(&'static str, &'a str)> {
         let mut tag_names = defn.group_by();
         // Add the bucket label name as an additional tag name.
         tag_names.push(self.buckets.label_name);
@@ -987,7 +987,7 @@ struct Stat {
 
 impl Stat {
     // Get all the tags for this stat as a vector of `(name, value)` tuples.
-    fn get_tag_pairs<'a, 'b>(&'a self, tag_values: &'b str) -> Vec<(&'static str, &'b str)> {
+    fn get_tag_pairs<'a>(&self, tag_values: &'a str) -> Vec<(&'static str, &'a str)> {
         // if the stat type has its own `get_tag_pairs` method use that, otherwise
         // use the default.
         self.stat_type_data

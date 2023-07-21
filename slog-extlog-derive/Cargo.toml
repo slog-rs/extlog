@@ -20,7 +20,6 @@ quote = "1.0.7"
 proc-macro = true
 
 [dev-dependencies]
-erased-serde = "0.3"
 iobuffer = "0.2"
 serde =  { version = "1.0", features = ["derive"] }
 # Cargo doesn't let you publish crates with circular dev dependencies,
