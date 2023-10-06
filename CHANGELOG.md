@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
-### Changed
+### Fixed
 
 ### Added
+- Allow providing the `Id` field of `LogDetails` as a literal integer as well as a quoted integer
+- Allow providing the `Value` field of `StatTrigger` as a literal integer as well as a quoted integer
 
 ### Fixed
+- Migrate to `syn v2.0`
 
 ## [8.0.0]
 
