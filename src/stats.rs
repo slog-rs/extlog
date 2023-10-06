@@ -192,8 +192,19 @@ macro_rules! define_stats {
 pub struct StatDefinitionTagged {
     /// The statistic definition
     pub defn: &'static (dyn StatDefinition + Sync),
-    /// THe fixed tag values.  The keys *must* match keys in `defn`.
+    /// The fixed tag values.  The keys *must* match keys in `defn`.
     pub fixed_tags: &'static [(&'static str, &'static str)],
+}
+
+impl StatDefinitionTagged {
+    /// Check if the passed set of fixed tags corresponds to this statistic definition.
+    pub fn has_fixed_groups(&self, tags: &[(&str, &str)]) -> bool {
+        if self.fixed_tags.len() != tags.len() {
+            return false;
+        }
+
+        self.fixed_tags.iter().all(|self_tag| tags.contains(self_tag))
+    }
 }
 
 /// A trait indicating that this log can be used to trigger a statistics change.
