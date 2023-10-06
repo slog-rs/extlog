@@ -1,7 +1,7 @@
 [package]
 authors = ["Metaswitch Networks Ltd"]
 name = "slog-extlog"
-version = "8.0.0"
+version = "8.1.0"
 license = "Apache-2.0"
 description = "Object-based logging and statistics tracking through logs"
 homepage = "https://github.com/slog-rs/extlog"
@@ -29,12 +29,12 @@ tokio = { version = "1", features = [ "rt", "time" ], optional = true }
 # this is to allow the derive <-> extlog crate APIs to stay perfectly in sync,
 # allowing breaking changes that only affect the interface between these crates
 # to be elided downstream
-slog-extlog-derive = { version = "=8.0.0", path = "slog-extlog-derive", optional = true }
+slog-extlog-derive = { version = "=8.1.0", path = "slog-extlog-derive", optional = true }
 
 [dev-dependencies]
 bencher = "0.1.5"
 tokio = { version = "1", features = [ "macros", "rt-multi-thread", "time" ] }
-slog-extlog-derive = { version = "=8.0.0", path = "slog-extlog-derive" }
+slog-extlog-derive = { version = "=8.1.0", path = "slog-extlog-derive" }
 
 [features]
 interval_logging = [ "tokio" ]

@@ -1,6 +1,6 @@
 [package]
 name = "slog-extlog-derive"
-version = "8.0.0"
+version = "8.1.0"
 authors = ["Metaswitch Networks Ltd"]
 license = "Apache-2.0"
 description = "Custom derive code for slog-extlog"
@@ -22,12 +22,5 @@ proc-macro = true
 [dev-dependencies]
 iobuffer = "0.2"
 serde =  { version = "1.0", features = ["derive"] }
-# Cargo doesn't let you publish crates with circular dev dependencies,
-# so in order to publish new versions you'll need to temporarily comment out
-# this dependency in your local codebase and publish the crate using the
-# --allow-dirty flag.
-#
-# This is a known problem in Cargo - see
-# https://github.com/rust-lang/cargo/issues/4242 for tracking issue.
 slog-extlog = { path = ".." }
 tokio = { version = "1.32", features = ["macros", "rt-multi-thread"] }

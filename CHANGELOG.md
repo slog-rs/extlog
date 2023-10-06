@@ -7,11 +7,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+### Added
+
 ### Fixed
+
+## [8.1.0]
 
 ### Added
 - Allow providing the `Id` field of `LogDetails` as a literal integer as well as a quoted integer
 - Allow providing the `Value` field of `StatTrigger` as a literal integer as well as a quoted integer
+- `slog_extlog` now exports `erased-serde` so users of `slog-extlog-derive` don't need to import that crate into their namespace
 
 ### Fixed
 - Migrate to `syn v2.0`
