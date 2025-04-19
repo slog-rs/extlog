@@ -40,17 +40,17 @@
 //! One `StatTrigger` attribute should be added to the log for each statistic it should update.
 //!
 //!   - `StatName` (mandatory) - The name of the statistic to change, as defined on the
-//!           corresponding [`StatDefinition`](../slog_extlog/stats/struct.StatDefinition.html).
+//!     corresponding [`StatDefinition`](../slog_extlog/stats/struct.StatDefinition.html).
 //!   - `Action` (mandatory) - one of: `Incr`, `Decr`, and `SetVal`, depending on whether this
-//!        change triggers an increment, decrement, or set to an explicit value.
+//!     change triggers an increment, decrement, or set to an explicit value.
 //!   - `Condition` (optional) - A condition, based on the log fields, for this stat to be changed.
-//!      if not set, the stat is changed on every log.  The value of this parameter is an
-//!        expression that returns a Boolean, and can use `self` for the current log object.
+//!     if not set, the stat is changed on every log.  The value of this parameter is an
+//!     expression that returns a Boolean, and can use `self` for the current log object.
 //!   - `Value` or `ValueFrom` - The value to increment/decrement/set.  One and only one
-//!   of these must be provided.  `Value` for a fixed number, `ValueFrom` for an arbitrary
-//!   expression to find the value that may return self.
+//!     of these must be provided.  `Value` for a fixed number, `ValueFrom` for an arbitrary
+//!     expression to find the value that may return self.
 //!   - `FixedGroups (optional)` - A comma-separated list of fixed tags to add to this statistic
-//!   for this trigger - see below.
+//!     for this trigger - see below.
 //!
 //! ### Grouped (tagged) statistics)
 //! Some statistics may be grouped with *tags*.  Tags can be defined in two ways.
@@ -515,12 +515,12 @@ fn impl_ext_loggable(ast: &syn::DeriveInput) -> proc_macro2::TokenStream {
     // (which isn't the `to_str` or `to_short_str` name unfortunately).
     let (level, text, id) = parse_log_details(log_details);
     let level = match level {
-        slog::Level::Critical => "Critical",
-        slog::Level::Error => "Error",
-        slog::Level::Warning => "Warning",
-        slog::Level::Info => "Info",
-        slog::Level::Debug => "Debug",
-        slog::Level::Trace => "Trace",
+        Level::Critical => "Critical",
+        Level::Error => "Error",
+        Level::Warning => "Warning",
+        Level::Info => "Info",
+        Level::Debug => "Debug",
+        Level::Trace => "Trace",
     };
     let level = syn::Ident::new(level, proc_macro2::Span::call_site());
 

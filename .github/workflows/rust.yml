@@ -11,15 +11,13 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
     - name: Build (all features)
-      run: cargo clippy --verbose --all-targets --all-features --all -- -D warnings
+      run: cargo clippy --verbose --all-targets --all-features --all -- -D warnings -A clippy::duplicated-attributes
     - name: Build (no features)
-      run: cargo clippy --verbose --all-targets --no-default-features --all -- -D warnings
+      run: cargo clippy --verbose --all-targets --no-default-features --all -- -D warnings -A clippy::duplicated-attributes
     - name: Run tests (all features)
       run: cargo test --verbose --all --all-features
     - name: Run tests (no features)

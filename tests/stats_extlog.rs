@@ -1,6 +1,6 @@
-#![cfg(feature = "interval_logging")]
 //! Extlog tests for Stats tracker.
 //!
+#![cfg(feature = "interval_logging")]
 
 use slog::{info, o};
 use slog_extlog::{define_stats, xlog};
@@ -180,8 +180,8 @@ fn log_external_grouped(logger: &StatisticsLogger, name: String, error: u8) {
 fn get_stat_logs(stat_name: &str, data: &mut Buffer) -> Vec<serde_json::Value> {
     logs_in_range("STATS-1", "STATS-2", data)
         .iter()
-        .cloned()
         .filter(|l| l["name"] == stat_name)
+        .cloned()
         .collect()
 }
 

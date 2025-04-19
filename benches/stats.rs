@@ -93,7 +93,7 @@ fn gauge_incr_decr_log(bench: &mut Bencher) {
     let logger = setup_logger();
     bench.iter(|| {
         xlog!(logger, FooIncrLog { foo: 42 });
-        xlog!(logger, FooIncrLog { foo: 27 });
+        xlog!(logger, FooDecrLog { foo: 27 });
     })
 }
 
