@@ -34,7 +34,7 @@
 //!   - `use slog_extlog_derive::ExtLoggable` and derive the `ExtLoggable` trait for this object.
 //!      - If your structure is overly complex or unusual, manually implement [`ExtLoggable`].
 //!   - Early in your program or libary, obtain or create a [`Logger`] of the correct format and
-//!     wrap it in a ['StatisticsLogger`].
+//!     wrap it in a [`StatisticsLogger`].
 //!
 //! Unless you want to support statistics tracking, then the easiest way to obtain an
 //! appropriate logger is to create a [`DefaultLogger`](./type.DefaultLogger.html).
