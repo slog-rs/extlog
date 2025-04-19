@@ -15,7 +15,7 @@
 //!  * External logs can be defined using this crate, and then logged using
 //!    a [`StatisticsLogger`].  They can also be used as triggers for statistics generation.
 //!  * For internal, low-level logging, the usual slog macros (`info!`, `debug!`, `trace!` etc)
-//! can be used.
+//!    can be used.
 //!
 //! Any object can be made into an external log by implementing [`ExtLoggable`].  In nearly all
 //! cases this trait should be automatically derived using the
@@ -42,6 +42,7 @@
 //! You can then call the [`slog_extlog::xlog!()`] macro, passing in the [`StatisticsLogger`] and
 //! an instance of your structure, and it will be logged according to the Logger's associated Drain
 //! as usual.
+//!
 //! Structure parameters will be added as key-value pairs, but with the bonus that you get
 //! type checking.
 //!
@@ -68,7 +69,7 @@
 //!
 //!   - Create a static set of statistic definitions using the [`define_stats`] macro.
 //!   - Add `StatTrigger` attributes to each external log that explains which statistics
-//!   the log should update.
+//!     the log should update.
 //!
 //! The automatic derivation code then takes care of updating the statistics as and when required.
 //!

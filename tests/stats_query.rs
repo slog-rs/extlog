@@ -92,22 +92,6 @@ struct BucketCounterLog {
 
 #[derive(ExtLoggable, Clone, Serialize)]
 #[LogDetails(
-    Id = "5",
-    Text = "cumulative test bucket counter stat log",
-    Level = "Info"
-)]
-#[StatTrigger(
-    StatName = "test_bucket_counter_cumul_freq",
-    Action = "Incr",
-    Value = "2"
-)]
-struct CumulBucketCounterLog {
-    #[BucketBy(StatName = "test_bucket_counter_cumul_freq")]
-    bucket_value: f32,
-}
-
-#[derive(ExtLoggable, Clone, Serialize)]
-#[LogDetails(
     Id = "6",
     Text = "test grouped bucket counter stat log",
     Level = "Info"

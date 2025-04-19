@@ -87,18 +87,18 @@ pub trait StatDefinition: fmt::Debug {
 ///
 ///   - `StatName` is the externally-facing metric name.
 ///   - `Type` is the `StatType` of this statistic, for example `Counter`.
-///    Must be a valid subtype of that enum.
+///     Must be a valid subtype of that enum.
 ///   - `Description`  is a human readable description of the statistic.  This will be logged as
-///   the log message,
+///     the log message,
 ///   - The list of `tags` define field names to group the statistic by.
-///    A non-empty list indicates that this statistic should be split into groups,
-///   counting the stat separately for each different value of these fields that is seen.
-///   These might be a remote hostname, say, or a tag field.
+///     A non-empty list indicates that this statistic should be split into groups,
+///     counting the stat separately for each different value of these fields that is seen.
+///     These might be a remote hostname, say, or a tag field.
 ///     - If multiple tags are provided, the stat is counted separately for all distinct
 ///       combinations of tag values.
 ///     - Use of this feature should be avoided for fields that can take very many values, such as
-///   a subscriber number, or for large numbers of tags - each tag name and seen value adds a
-///   performance dip and a small memory overhead that is never freed.
+///       a subscriber number, or for large numbers of tags - each tag name and seen value adds a
+///       performance dip and a small memory overhead that is never freed.
 ///   - If the `Type` field is set to `BucketCounter`, then a `BucketMethod`, bucket label and bucket limits must
 ///     also be provided like so:
 ///
