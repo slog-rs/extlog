@@ -159,7 +159,7 @@ extern crate quote;
 
 use proc_macro::TokenStream;
 use slog::Level;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -189,8 +189,8 @@ impl FromStr for StatTriggerAction {
 // a bucketing value.
 #[derive(Default)]
 struct FieldReferences {
-    stat_group_refs: HashMap<String, HashSet<syn::Ident>>,
-    bucket_by_ref: HashMap<String, syn::Ident>,
+    stat_group_refs: BTreeMap<String, BTreeSet<syn::Ident>>,
+    bucket_by_ref: BTreeMap<String, syn::Ident>,
 }
 
 // Info about a statistic trigger
@@ -200,8 +200,8 @@ struct StatTriggerData {
     condition_body: syn::Expr,
     action: StatTriggerAction,
     val: syn::Expr,
-    fixed_groups: HashMap<String, String>,
-    field_groups: HashSet<syn::Ident>,
+    fixed_groups: BTreeMap<String, String>,
+    field_groups: BTreeSet<syn::Ident>,
     bucket_by: Option<syn::Ident>,
 }
 
@@ -702,10 +702,10 @@ fn collate_field_references(fields: &syn::FieldsNamed) -> FieldReferences {
                         .insert(field_name);
                 }
                 RefType::BucketBy => match field_refs.bucket_by_ref.entry(stat_name.clone()) {
-                    std::collections::hash_map::Entry::Occupied(_) => {
+                    std::collections::btree_map::Entry::Occupied(_) => {
                         panic!("Multiple `BucketBy` attributes found for `{}`", stat_name)
                     }
-                    std::collections::hash_map::Entry::Vacant(v) => {
+                    std::collections::btree_map::Entry::Vacant(v) => {
                         v.insert(field_name);
                     }
                 },
@@ -751,7 +751,7 @@ fn parse_stat_trigger(attr: &syn::Attribute, field_refs: &FieldReferences) -> St
     let mut cond = None;
     let mut trigger_action = None;
     let mut trigger_value = None;
-    let mut fixed_groups = HashMap::new();
+    let mut fixed_groups = BTreeMap::new();
     attr.parse_nested_meta(|meta| {
         if meta.path.is_ident("StatName") {
             let value = meta.value().unwrap();
