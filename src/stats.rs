@@ -266,7 +266,7 @@ impl slog::Value for BucketLimit {
 impl fmt::Display for BucketLimit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BucketLimit::Num(val) => write!(f, "{}", val),
+            BucketLimit::Num(val) => write!(f, "{val}"),
             BucketLimit::Unbounded => write!(f, "Unbounded"),
         }
     }
@@ -922,7 +922,7 @@ impl BucketCounterData {
                 .map(|(mut tag_values, index, val)| {
                     let bucket = self.buckets.get(index).expect("Invalid bucket index");
                     // Add the bucket label value as an additional tag value.
-                    tag_values.push_str(&format!(",{}", bucket));
+                    tag_values.push_str(&format!(",{bucket}"));
                     (tag_values, val)
                 })
                 .collect()

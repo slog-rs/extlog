@@ -105,12 +105,12 @@ pub fn assert_json_matches(actual: &serde_json::Value, expected: &serde_json::Va
     ) {
         if left.is_object() && right.is_object() {
             for (key, value) in right.as_object().unwrap().iter() {
-                let path = format!("{}.{}", path, key);
+                let path = format!("{path}.{key}");
                 check(actual, expected, &left[key], value, &path);
             }
         } else if left.is_array() && right.is_array() {
             for (index, value) in right.as_array().unwrap().iter().enumerate() {
-                let path = format!("{}.{}", path, index);
+                let path = format!("{path}.{index}");
                 check(actual, expected, &left[index], value, &path);
             }
         } else {

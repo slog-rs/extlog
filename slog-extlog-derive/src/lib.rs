@@ -179,7 +179,7 @@ impl FromStr for StatTriggerAction {
             "Decr" => Ok(StatTriggerAction::Decrement),
             "SetVal" => Ok(StatTriggerAction::SetValue),
             "None" => Ok(StatTriggerAction::Ignore),
-            s => Err(format!("Unknown StatTrigger action {}", s)),
+            s => Err(format!("Unknown StatTrigger action {s}")),
         }
     }
 }

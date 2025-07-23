@@ -114,7 +114,7 @@ fn single_grouped_counter_multi_bucket(bench: &mut Bencher) {
         xlog!(
             logger,
             ThirdExternalLog {
-                name: format!("name-{}", idx),
+                name: format!("name-{idx}"),
             }
         );
         idx += 1;
