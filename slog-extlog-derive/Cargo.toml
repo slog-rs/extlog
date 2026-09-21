@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 proc-macro2 = "1.0.68"
 slog = { version = "2.7", features = ['nested-values'] }
-syn = { version = "2.0.38", features = ["full", "extra-traits"] }
+syn = { version = "3.0.6", features = ["full", "extra-traits"] }
 quote = "1.0.33"
 
 [lib]
