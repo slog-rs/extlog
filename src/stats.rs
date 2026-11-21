@@ -254,7 +254,7 @@ impl slog::Value for BucketLimit {
         &self,
         _record: &::slog::Record<'_>,
         key: ::slog::Key,
-        serializer: &mut dyn (::slog::Serializer),
+        serializer: &mut dyn ::slog::Serializer,
     ) -> ::slog::Result {
         match *self {
             BucketLimit::Num(value) => serializer.emit_i64(key, value),
@@ -361,7 +361,7 @@ impl slog::Value for StatType {
         &self,
         _record: &::slog::Record<'_>,
         key: ::slog::Key,
-        serializer: &mut dyn (::slog::Serializer),
+        serializer: &mut dyn ::slog::Serializer,
     ) -> ::slog::Result {
         match *self {
             StatType::Counter => serializer.emit_str(key, "counter"),
