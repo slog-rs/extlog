@@ -12,8 +12,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 
 ### Fixed
+
+## [8.1.1]
+
+### Fixed
 - Stop using `HashMap`/`HashSet` in `slog-extlog-derive`.
   - This removes a source of rustc HIR non-determinism for consumeing crates, resolving rustc failures when built with non-cargo build systems like bazel/buck. 
+- Include the `LICENSE` file in the published `slog-extlog-derive` crate.
 
 ## [8.1.0]
 
